@@ -1,24 +1,19 @@
-
-require('dotenv').config();
-
 const express = require('express');
-const cors = require('cors');
-
 const app = express();
 
-app.use(cors());
+const authController = require('../controller/auth.controller');
+const pokemonController = require('../controller/pokemon.controller');
+const usuarioController = require('../controller/usuario.controller');
+const teamController = require('../controller/team.controller');
+
 app.use(express.json());
 
-const produtosRoutes = require('./routes/produtos');
+// Registo das rotas mapeadas no Excalidraw
+app.use(authController);
+app.use(pokemonController);
+app.use(usuarioController);
+app.use(teamController);
 
-app.use('/api/produtos', produtosRoutes);
-
-app.get('/', (req, res) => {
-  res.json({ mensagem: 'API funcionando!' });
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+app.listen(3000, () => {
+  console.log('Servidor a executar na porta 3000');
 });
