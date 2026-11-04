@@ -1,0 +1,43 @@
+erDiagram
+
+USERS ||--o{ POKEMON_USER : possui
+POKEMONS ||--o{ POKEMON_USER : relacionado
+USERS ||--o{ TEAM : possui
+POKEMONS ||--o{ POKEMON_TEAM : pertence
+TEAM ||--o{ POKEMON_TEAM : contem
+
+USERS {
+    int id PK
+    varchar name UK
+    varchar password
+}
+
+POKEMONS {
+    int id PK
+    varchar name
+    varchar type
+    boolean shiny
+    varchar image
+}
+
+POKEMON_USER {
+    int id PK
+    int id_user FK
+    int id_pokemon FK
+    boolean catch "DEFAULT false"
+    boolean favority "DEFAULT false"
+}
+
+TEAM {
+     int id PK
+     int id_user FK
+    varchar name
+     varchar style
+     varchar image
+}
+
+POKEMON_TEAM {
+    int id PK
+    int id_pokemon FK
+    int id_team FK
+}
