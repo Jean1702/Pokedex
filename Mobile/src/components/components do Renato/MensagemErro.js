@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { bordas, cores, espacos, fontes } from '../styles/theme'
+import { bordas, cores, espacos, fontes } from '../../styles/theme'
 
 // Nao renderiza nada quando nao ha mensagem
 const MensagemErro = ({ mensagem }) => {

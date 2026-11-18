@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { bordas, cores, espacos, fontes } from '../styles/theme'
+import { bordas, cores, espacos, fontes } from '../../styles/theme'
 
 // onPress: abre a tarefa | onAlternar: marca/desmarca como concluida
 const TarefaCard = ({ tarefa, onPress, onAlternar }) => {

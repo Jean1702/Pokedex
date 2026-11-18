@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native'
-import { bordas, cores, espacos, fontes } from '../styles/theme'
+import { bordas, cores, espacos, fontes } from '../../styles/theme'
 
 // Rotulo + TextInput. As demais props (value, onChangeText, secureTextEntry...)
 // sao repassadas para o TextInput.

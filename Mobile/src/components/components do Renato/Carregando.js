@@ -1,5 +1,5 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { cores, espacos, fontes } from '../styles/theme'
+import { cores, espacos, fontes } from '../../styles/theme'
 
 const Carregando = ({ mensagem = 'Carregando...' }) => {
   return (

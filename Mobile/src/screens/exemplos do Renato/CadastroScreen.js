@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Toast from 'react-native-toast-message'
-import { cadastrar } from '../services/auth.service'
-import Botao from '../components/Botao'
-import Campo from '../components/Campo'
-import MensagemErro from '../components/MensagemErro'
-import { cores, espacos } from '../styles/theme'
+import { cadastrar } from '../../services/auth.service'
+import Botao from '../../components/components do Renato/Botao'
+import Campo from '../../components/components do Renato/Campo'
+import MensagemErro from '../../components/components do Renato/MensagemErro'
+import { cores, espacos } from '../../styles/theme'
 
 // Frames 01 - Cadastro e 01b - Cadastro (erro)
 const CadastroScreen = ({ navigation }) => {

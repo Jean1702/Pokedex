@@ -8,7 +8,6 @@ const teamController = require('../controller/team.controller');
 
 app.use(express.json());
 
-// Registo das rotas mapeadas no Excalidraw
 app.use(authController);
 app.use(pokemonController);
 app.use(usuarioController);

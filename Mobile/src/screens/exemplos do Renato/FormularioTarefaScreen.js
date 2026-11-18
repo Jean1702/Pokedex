@@ -1,12 +1,12 @@
 import { useContext, useLayoutEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Toast from 'react-native-toast-message'
-import { AuthContext } from '../contexts/AuthContext'
-import { alterarTarefa, criarTarefa } from '../services/tarefa.service'
-import Botao from '../components/Botao'
-import Campo from '../components/Campo'
-import MensagemErro from '../components/MensagemErro'
-import { cores, espacos } from '../styles/theme'
+import { AuthContext } from '../../contexts/AuthContext'
+import { alterarTarefa, criarTarefa } from '../../services/tarefa.service'
+import Botao from '../../components/components do Renato/Botao'
+import Campo from '../../components/components do Renato/Campo'
+import MensagemErro from '../../components/components do Renato/MensagemErro'
+import { cores, espacos } from '../../styles/theme'
 
 // Frames 03 - Formulário de Tarefa e 03b - Formulário de Tarefa (erro).
 // Sem parametros: cadastra uma nova tarefa.

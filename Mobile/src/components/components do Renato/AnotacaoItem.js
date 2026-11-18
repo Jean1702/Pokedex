@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { bordas, cores, espacos, fontes } from '../styles/theme'
+import { bordas, cores, espacos, fontes } from '../../styles/theme'
 
 const formatarData = (iso) => new Date(iso).toLocaleString('pt-BR', {
   day: '2-digit',

@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { bordas, cores, espacos, fontes } from '../styles/theme'
+import { bordas, cores, espacos, fontes } from '../../styles/theme'
 
 // variante: 'primaria' (fundo azul), 'secundaria' (contorno) ou 'perigo' (vermelho)
 const Botao = ({ titulo, onPress, variante = 'primaria', icone, carregando = false }) => {
