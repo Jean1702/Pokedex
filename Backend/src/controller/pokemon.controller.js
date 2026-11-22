@@ -70,7 +70,7 @@ router.get('/pokemons', async (req, res) => {
       shiny: pokemon.shiny,
       types: pokemon.pokemon_types
         .sort((a, b) => a.slot - b.slot)
-        .map((pt) => pt.types.name)
+        .map((pt) => pt.types.name),
     }));
 
     allPokemons = allPokemons.concat(formatted);
@@ -80,6 +80,13 @@ router.get('/pokemons', async (req, res) => {
     } else {
       from += BATCH_SIZE;
     }
+  }
+
+  if (req.query.type) {
+    const tipoBuscado = req.query.type.trim().toLowerCase();
+    allPokemons = allPokemons.filter((pokemon) =>
+      pokemon.types.some((t) => String(t).toLowerCase() === tipoBuscado)
+    );
   }
 
   return res.status(200).json(allPokemons);

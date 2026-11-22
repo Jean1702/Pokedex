@@ -5,11 +5,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthContext, AuthProvider } from './src/contexts/AuthContext';
+import { cores } from './src/styles/theme';
 import HomeScreen from './src/screens/HomeScreen';
 import PokedexScreen from './src/screens/PokedexScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
-import { cores } from './src/styles/theme';
+import PokemonScreen from './src/screens/PokemonScreen';
+import AttacksPokemonScreen from './src/screens/AttacksPokemonScreen';
+import InfoPokemonScreen from './src/screens/InfoPokemonScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,6 +37,9 @@ function Rotas() {
     >
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="PokedexScreen" component={PokedexScreen} />
+      <Stack.Screen name="PokemonScreen" component={PokemonScreen} />
+      <Stack.Screen name="AttacksPokemonScreen" component={AttacksPokemonScreen} />
+      <Stack.Screen name="InfoPokemonScreen" component={InfoPokemonScreen} />
 
       {token ? (
         <>
