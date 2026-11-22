@@ -1,41 +1,76 @@
-import { createContext, useEffect, useState } from 'react'
-import { createAsyncStorage } from '@react-native-async-storage/async-storage'
-import { login } from '../services/auth.service'
-import { definirAoExpirarSessao } from '../services/api'
+import React, { createContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { login as loginApi, registrar as registrarApi } from '../services/auth.service';
 
-const storage = createAsyncStorage('tarefas-anotacoes')
+export const AuthContext = createContext(null);
 
-export const AuthContext = createContext(null)
+const TOKEN_KEY = '@pokedex:token';
+const AVATAR_KEY = '@pokedex:avatar';
 
-export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(null)
-  // true enquanto o token salvo esta sendo lido do AsyncStorage
-  const [iniciando, setIniciando] = useState(true)
-
-  const sair = async () => {
-    await storage.removeItem('token')
-    setToken(null)
-  }
+export function AuthProvider({ children }) {
+  const [token, setToken] = useState(null);
+  const [avatarUri, setAvatarUri] = useState(null);
+  const [iniciando, setIniciando] = useState(true);
 
   useEffect(() => {
-    // Qualquer 401 em rota protegida encerra a sessao e volta ao login
-    definirAoExpirarSessao(sair)
+    Promise.all([
+      AsyncStorage.getItem(TOKEN_KEY),
+      AsyncStorage.getItem(AVATAR_KEY),
+    ])
+      .then(([tokenSalvo, avatarSalvo]) => {
+        if (tokenSalvo) setToken(tokenSalvo);
+        if (avatarSalvo) setAvatarUri(avatarSalvo);
+      })
+      .finally(() => setIniciando(false));
+  }, []);
 
-    storage.getItem('token')
-      .then(setToken)
-      .finally(() => setIniciando(false))
-  }, [])
+  const entrar = async (name, password) => {
+    const dados = await loginApi(name, password);
+    if (!dados?.token) {
+      throw new Error('Token não retornado pelo servidor.');
+    }
+    await AsyncStorage.setItem(TOKEN_KEY, dados.token);
+    setToken(dados.token);
+  };
 
-  // Somente o token e guardado. A senha nunca e armazenada.
-  const entrar = async (email, senha) => {
-    const dados = await login(email, senha)
-    await storage.setItem('token', dados.token)
-    setToken(dados.token)
-  }
+  const cadastrar = async (name, password) => {
+    const dados = await registrarApi(name, password);
+    if (dados?.token) {
+      await AsyncStorage.setItem(TOKEN_KEY, dados.token);
+      setToken(dados.token);
+    } else {
+      await entrar(name, password);
+    }
+  };
+
+  const atualizarAvatar = async (uri) => {
+    if (uri) {
+      await AsyncStorage.setItem(AVATAR_KEY, uri);
+      setAvatarUri(uri);
+    } else {
+      await AsyncStorage.removeItem(AVATAR_KEY);
+      setAvatarUri(null);
+    }
+  };
+
+  const sair = async () => {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+  };
 
   return (
-    <AuthContext value={{ token, iniciando, entrar, sair }}>
+    <AuthContext.Provider
+      value={{
+        token,
+        avatarUri,
+        iniciando,
+        entrar,
+        cadastrar,
+        atualizarAvatar,
+        sair,
+      }}
+    >
       {children}
-    </AuthContext>
-  )
+    </AuthContext.Provider>
+  );
 }

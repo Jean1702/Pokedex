@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
     StyleSheet,
     Text,
@@ -10,41 +10,85 @@ import {
     Modal,
     Pressable,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import AvatarUser from '../components/AvatarUser';
 import PokemonCard from '../components/PokemonCard';
-import { pokemonService } from '../services/api';
+import { AuthContext } from '../contexts/AuthContext';
+import { listarPokemons } from '../services/pokemon.service';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
 
 const GERACOES = [
-    { id: 'todas', label: 'Todas Gerações', min: 1, max: 9999 },
-    { id: 'gen1', label: 'Gen 1 • Kanto', min: 1, max: 151 },
-    { id: 'gen2', label: 'Gen 2 • Johto', min: 152, max: 251 },
-    { id: 'gen3', label: 'Gen 3 • Hoenn', min: 252, max: 386 },
-    { id: 'gen4', label: 'Gen 4 • Sinnoh', min: 387, max: 493 },
+    { id: 'todas', label: 'Todas', regiao: 'Dex Completa', faixa: '001–1025', min: 1, max: 1025, cor: cores.primaria },
+    { id: 'gen1', label: 'Gen I', regiao: 'Kanto', faixa: '001–151', min: 1, max: 151, cor: '#EF4444' },
+    { id: 'gen2', label: 'Gen II', regiao: 'Johto', faixa: '152–251', min: 152, max: 251, cor: '#F59E0B' },
+    { id: 'gen3', label: 'Gen III', regiao: 'Hoenn', faixa: '252–386', min: 252, max: 386, cor: '#10B981' },
+    { id: 'gen4', label: 'Gen IV', regiao: 'Sinnoh', faixa: '387–493', min: 387, max: 493, cor: '#3B82F6' },
+    { id: 'gen5', label: 'Gen V', regiao: 'Unova', faixa: '494–649', min: 494, max: 649, cor: '#6366F1' },
+    { id: 'gen6', label: 'Gen VI', regiao: 'Kalos', faixa: '650–721', min: 650, max: 721, cor: '#EC4899' },
+    { id: 'gen7', label: 'Gen VII', regiao: 'Alola', faixa: '722–809', min: 722, max: 809, cor: '#F97316' },
+    { id: 'gen8', label: 'Gen VIII', regiao: 'Galar', faixa: '810–905', min: 810, max: 905, cor: '#14B8A6' },
+    { id: 'gen9', label: 'Gen IX', regiao: 'Paldea', faixa: '906–1025', min: 906, max: 1025, cor: '#A855F7' },
 ];
 
+const TIPOS_OFICIAIS = [
+    { nome: 'Todos', label: 'Todos', cor: cores.primaria },
+    { nome: 'Normal', label: 'Normal', cor: '#A8A77A' },
+    { nome: 'Fire', label: 'Fogo', cor: '#F97316' },
+    { nome: 'Water', label: 'Água', cor: '#38BDF8' },
+    { nome: 'Grass', label: 'Planta', cor: '#22C55E' },
+    { nome: 'Electric', label: 'Elétrico', cor: '#FACC15' },
+    { nome: 'Ice', label: 'Gelo', cor: '#67E8F9' },
+    { nome: 'Fighting', label: 'Lutador', cor: '#EF4444' },
+    { nome: 'Poison', label: 'Venenoso', cor: '#C084FC' },
+    { nome: 'Ground', label: 'Terra', cor: '#D97706' },
+    { nome: 'Flying', label: 'Voador', cor: '#818CF8' },
+    { nome: 'Psychic', label: 'Psíquico', cor: '#EC4899' },
+    { nome: 'Bug', label: 'Inseto', cor: '#84CC16' },
+    { nome: 'Rock', label: 'Pedra', cor: '#B45309' },
+    { nome: 'Ghost', label: 'Fantasma', cor: '#A855F7' },
+    { nome: 'Dragon', label: 'Dragão', cor: '#6366F1' },
+    { nome: 'Dark', label: 'Sombrio', cor: '#71717A' },
+    { nome: 'Steel', label: 'Aço', cor: '#94A3B8' },
+    { nome: 'Fairy', label: 'Fada', cor: '#F472B6' },
+];
+
+const SUFIXOS_EXTRAS = [
+    '-mega', '-gmax', '-alola', '-galar', '-hisui', '-paldea',
+    '-totem', '-primal', '-origin', '-eternamax', '-blade', '-crowned',
+];
+
+function ehPokemonBase(pokemon) {
+    const idNum = Number(pokemon.id);
+    if (idNum > 1025) return false;
+    const nome = (pokemon.name || '').toLowerCase();
+    return !SUFIXOS_EXTRAS.some((sufixo) => nome.includes(sufixo));
+}
+
 export default function PokedexScreen({ navigation }) {
+    const { token } = useContext(AuthContext);
+
     const [pokemons, setPokemons] = useState([]);
     const [carregando, setCarregando] = useState(true);
     const [atualizando, setAtualizando] = useState(false);
-    const [erro, setErro] = useState(null);
+    const [erro, setErro] = useState('');
 
     const [geracaoSelecionada, setGeracaoSelecionada] = useState(GERACOES[0]);
-    const [tipoSelecionado, setTipoSelecionado] = useState('Todos');
+    const [tipoSelecionado, setTipoSelecionado] = useState(TIPOS_OFICIAIS[0]);
     const [apenasShiny, setApenasShiny] = useState(false);
-    const [buscaAberta, setBuscaAberta] = useState(false);
     const [busca, setBusca] = useState('');
     const [modalFiltro, setModalFiltro] = useState(null);
 
-    const carregarPokemons = useCallback(async (silencioso = false) => {
+    const carregarDados = useCallback(async (tipoNome = 'Todos', silencioso = false) => {
         try {
             if (!silencioso) setCarregando(true);
-            setErro(null);
+            setErro('');
 
-            const dados = await pokemonService.listarTodos();
-            setPokemons(Array.isArray(dados) ? dados : []);
-        } catch (err) {
-            setErro(err.message || 'Não foi possível conectar ao servidor.');
+            const dados = await listarPokemons(tipoNome);
+            const listaLimpa = Array.isArray(dados) ? dados.filter(ehPokemonBase) : [];
+            setPokemons(listaLimpa);
+        } catch (e) {
+            setErro(e.message || 'Erro ao carregar Pokémon.');
         } finally {
             setCarregando(false);
             setAtualizando(false);
@@ -52,32 +96,14 @@ export default function PokedexScreen({ navigation }) {
     }, []);
 
     useEffect(() => {
-        carregarPokemons();
-    }, [carregarPokemons]);
-
-    const tiposDisponiveis = useMemo(() => {
-        const unicos = new Set();
-        pokemons.forEach((p) => {
-            if (p.type) {
-                p.type
-                    .split('/')
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                    .forEach((t) => unicos.add(t));
-            }
-        });
-        return ['Todos', ...Array.from(unicos)];
-    }, [pokemons]);
+        carregarDados(tipoSelecionado.nome);
+    }, [tipoSelecionado, carregarDados]);
 
     const pokemonsFiltrados = useMemo(() => {
         return pokemons.filter((p) => {
             const idNum = Number(p.id);
             const bateGeracao =
                 idNum >= geracaoSelecionada.min && idNum <= geracaoSelecionada.max;
-
-            const bateTipo =
-                tipoSelecionado === 'Todos' ||
-                (p.type && p.type.toLowerCase().includes(tipoSelecionado.toLowerCase()));
 
             const bateShiny = !apenasShiny || Boolean(p.shiny);
 
@@ -87,263 +113,272 @@ export default function PokedexScreen({ navigation }) {
                 p.name?.toLowerCase().includes(termo) ||
                 String(p.id).includes(termo);
 
-            return bateGeracao && bateTipo && bateShiny && bateBusca;
+            return bateGeracao && bateShiny && bateBusca;
         });
-    }, [pokemons, geracaoSelecionada, tipoSelecionado, apenasShiny, busca]);
+    }, [pokemons, geracaoSelecionada, apenasShiny, busca]);
 
-    if (carregando) {
-        return (
-            <View style={styles.centralizado}>
-                <ActivityIndicator size="large" color={cores.primaria} />
-                <Text style={styles.textoStatus}>Sincronizando Pokédex...</Text>
-            </View>
-        );
-    }
+    const temFiltroAtivo =
+        geracaoSelecionada.id !== 'todas' ||
+        tipoSelecionado.nome !== 'Todos' ||
+        apenasShiny ||
+        busca.trim().length > 0;
 
-    if (erro) {
-        return (
-            <View style={styles.centralizado}>
-                <Text style={styles.textoErro}>{erro}</Text>
-                <TouchableOpacity
-                    style={styles.botaoTentarNovamente}
-                    onPress={() => carregarPokemons()}
-                >
-                    <Text style={styles.textoBotao}>Tentar novamente</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
+    const limparFiltros = () => {
+        setGeracaoSelecionada(GERACOES[0]);
+        setTipoSelecionado(TIPOS_OFICIAIS[0]);
+        setApenasShiny(false);
+        setBusca('');
+    };
 
     return (
         <View style={styles.container}>
-            {/* CABEÇALHO DE HARDWARE POKÉDEX COM CHANFRO E GRADIENTES */}
-            <LinearGradient
-                colors={['#232329', '#141418']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.headerPokedex}
-            >
-                <View style={styles.headerLinhaPrincipal}>
-                    {/* Lente Principal -> Leva para 05 - Login conforme o fluxo do diagrama */}
+            {/* CABEÇALHO FLUIDO E FUNCIONAL */}
+            <View style={styles.headerContainer}>
+                <View style={styles.linhaBusca}>
+                    <AvatarUser
+                        tamanho={44}
+                        onPress={() => navigation.navigate(token ? 'UsuarioScreen' : 'LoginScreen')}
+                    />
+
+                    <View style={styles.caixaBusca}>
+                        <Ionicons name="search" size={17} color={cores.textoSecundario} />
+                        <TextInput
+                            style={styles.inputBusca}
+                            placeholder="Buscar Pokémon ou #001..."
+                            placeholderTextColor={cores.textoSecundario}
+                            value={busca}
+                            onChangeText={setBusca}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        {busca.length > 0 && (
+                            <TouchableOpacity onPress={() => setBusca('')} hitSlop={8}>
+                                <Ionicons name="close-circle" size={18} color={cores.textoSecundario} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+
+                {/* Linha 2: Chips de Filtro Rápido (Geração, Tipo e Shiny) */}
+                <View style={styles.linhaFiltros}>
                     <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => {
-                            // Quando criarmos a LoginScreen: navigation.navigate('LoginScreen')
-                            console.log('Ir para Login');
-                        }}
-                        style={styles.lenteAnelExterno}
+                        activeOpacity={0.75}
+                        onPress={() => setModalFiltro('geracao')}
+                        style={[
+                            styles.chipFiltro,
+                            geracaoSelecionada.id !== 'todas' && {
+                                borderColor: geracaoSelecionada.cor,
+                                backgroundColor: `${geracaoSelecionada.cor}1F`,
+                            },
+                        ]}
                     >
-                        <LinearGradient
-                            colors={['#7DD3FC', '#0284C7', '#0369A1']}
-                            start={{ x: 0.2, y: 0.1 }}
-                            end={{ x: 0.9, y: 0.9 }}
-                            style={styles.lenteVidro}
-                        >
-                            <View style={styles.lenteReflexoPrincipal} />
-                            <View style={styles.lenteReflexoSecundario} />
-                        </LinearGradient>
+                        <Ionicons
+                            name="globe-outline"
+                            size={14}
+                            color={geracaoSelecionada.id !== 'todas' ? geracaoSelecionada.cor : cores.textoSecundario}
+                        />
+                        <Text style={styles.textoChipFiltro} numberOfLines={1}>
+                            {geracaoSelecionada.id === 'todas' ? 'Geração' : geracaoSelecionada.regiao}
+                        </Text>
+                        <Ionicons name="chevron-down" size={13} color={cores.textoSecundario} />
                     </TouchableOpacity>
 
-                    {/* Botões Centrais Estilizados: Geração & Tipo */}
-                    <View style={styles.grupoFiltros}>
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => setModalFiltro('geracao')}
-                            style={styles.botaoFiltroWrapper}
-                        >
-                            <LinearGradient
-                                colors={
-                                    geracaoSelecionada.id !== 'todas'
-                                        ? [cores.primaria, '#9A3412']
-                                        : ['#2A2A32', '#1A1A20']
-                                }
-                                style={[
-                                    styles.botaoFiltro,
-                                    geracaoSelecionada.id !== 'todas' && styles.botaoFiltroAtivo,
-                                ]}
-                            >
-                                <Text style={styles.textoFiltro} numberOfLines={1}>
-                                    {geracaoSelecionada.id === 'todas'
-                                        ? 'Geração'
-                                        : geracaoSelecionada.label.split('•')[0].trim()}
-                                </Text>
-                                <Text style={styles.setaMini}>▾</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => setModalFiltro('tipo')}
-                            style={styles.botaoFiltroWrapper}
-                        >
-                            <LinearGradient
-                                colors={
-                                    tipoSelecionado !== 'Todos'
-                                        ? [cores.primaria, '#9A3412']
-                                        : ['#2A2A32', '#1A1A20']
-                                }
-                                style={[
-                                    styles.botaoFiltro,
-                                    tipoSelecionado !== 'Todos' && styles.botaoFiltroAtivo,
-                                ]}
-                            >
-                                <Text style={styles.textoFiltro} numberOfLines={1}>
-                                    {tipoSelecionado === 'Todos' ? 'Tipo' : tipoSelecionado}
-                                </Text>
-                                <Text style={styles.setaMini}>▾</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Controles Laterais Direitos: Botão Busca + Losango Laranja Shiny */}
-                    <View style={styles.grupoDireita}>
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => {
-                                setBuscaAberta((prev) => !prev);
-                                if (buscaAberta) setBusca('');
-                            }}
-                            style={[
-                                styles.botaoQuadrado,
-                                buscaAberta && styles.botaoQuadradoAtivo,
-                            ]}
-                        >
-                            <Text style={styles.iconeBusca}>⌕</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => setApenasShiny((prev) => !prev)}
-                            style={[
-                                styles.losangoShiny,
-                                apenasShiny && styles.losangoShinyAtivo,
-                            ]}
-                        />
-                    </View>
-                </View>
-
-                {/* Barra Inferior do Header: LED Central + Contador de resultados */}
-                <View style={styles.headerRodape}>
-                    <View style={styles.ledsStatus}>
+                    <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() => setModalFiltro('tipo')}
+                        style={[
+                            styles.chipFiltro,
+                            tipoSelecionado.nome !== 'Todos' && {
+                                borderColor: tipoSelecionado.cor,
+                                backgroundColor: `${tipoSelecionado.cor}1F`,
+                            },
+                        ]}
+                    >
                         <View
                             style={[
-                                styles.ledCentral,
-                                (geracaoSelecionada.id !== 'todas' ||
-                                    tipoSelecionado !== 'Todos' ||
-                                    apenasShiny) &&
-                                styles.ledCentralAtivo,
+                                styles.pontoCor,
+                                {
+                                    backgroundColor:
+                                        tipoSelecionado.nome !== 'Todos' ? tipoSelecionado.cor : cores.textoSecundario,
+                                },
                             ]}
                         />
-                    </View>
+                        <Text style={styles.textoChipFiltro} numberOfLines={1}>
+                            {tipoSelecionado.nome === 'Todos' ? 'Tipo' : tipoSelecionado.label}
+                        </Text>
+                        <Ionicons name="chevron-down" size={13} color={cores.textoSecundario} />
+                    </TouchableOpacity>
 
-                    <Text style={styles.contadorTexto}>
-                        {pokemonsFiltrados.length} {pokemonsFiltrados.length === 1 ? 'encontrado' : 'encontrados'}
-                    </Text>
+                    <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() => setApenasShiny((prev) => !prev)}
+                        style={[
+                            styles.chipShiny,
+                            apenasShiny && styles.chipShinyAtivo,
+                        ]}
+                    >
+                        <Ionicons
+                            name={apenasShiny ? 'sparkles' : 'sparkles-outline'}
+                            size={14}
+                            color={apenasShiny ? '#FACC15' : cores.textoSecundario}
+                        />
+                        <Text style={[styles.textoChipFiltro, apenasShiny && { color: '#FACC15' }]}>
+                            Shiny
+                        </Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Campo de busca retrátil */}
-                {buscaAberta && (
-                    <TextInput
-                        style={styles.inputBusca}
-                        placeholder="Buscar Pokémon por nome ou número..."
-                        placeholderTextColor={cores.textoSecundario}
-                        value={busca}
-                        onChangeText={setBusca}
-                        autoCapitalize="none"
-                        autoFocus
-                    />
-                )}
-            </LinearGradient>
-
-            {/* Traço divisor curto característico do wireframe */}
-            <View style={styles.tracoDivisor} />
-
-            {/* Lista de Cards */}
-            <FlatList
-                data={pokemonsFiltrados}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={({ item }) => (
-                    <PokemonCard
-                        item={item}
-                        onAbrirDetalhe={(pokemonSelecionado) => {
-                            // Próxima tela do diagrama: 02-Pokémon
-                            console.log('Navegar para 02-Pokémon:', pokemonSelecionado);
-                        }}
-                    />
-                )}
-                contentContainerStyle={styles.lista}
-                showsVerticalScrollIndicator={false}
-                refreshing={atualizando}
-                onRefresh={() => {
-                    setAtualizando(true);
-                    carregarPokemons(true);
-                }}
-                ListEmptyComponent={
-                    <Text style={styles.textoStatus}>
-                        Nenhum Pokémon encontrado com esses filtros.
+                {/* Linha 3: Barra de Status Discreta (Total + Limpar) */}
+                <View style={styles.barraStatus}>
+                    <Text style={styles.textoContador}>
+                        {pokemonsFiltrados.length}{' '}
+                        {pokemonsFiltrados.length === 1 ? 'Pokémon exibido' : 'Pokémons exibidos'}
                     </Text>
-                }
-            />
 
-            {/* Modal Elegante de Seleção (Geração / Tipo) */}
+                    {temFiltroAtivo && (
+                        <TouchableOpacity onPress={limparFiltros} style={styles.botaoReset}>
+                            <Text style={styles.textoReset}>Limpar filtros</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
+            {/* CONTEÚDO PRINCIPAL */}
+            {carregando ? (
+                <View style={styles.centralizado}>
+                    <ActivityIndicator size="large" color={cores.primaria} />
+                    <Text style={styles.textoStatus}>Carregando Pokémons...</Text>
+                </View>
+            ) : erro ? (
+                <View style={styles.centralizado}>
+                    <Text style={styles.textoErro}>{erro}</Text>
+                    <TouchableOpacity
+                        style={styles.botaoTentarNovamente}
+                        onPress={() => carregarDados(tipoSelecionado.nome)}
+                    >
+                        <Text style={styles.textoBotao}>Tentar novamente</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <FlatList
+                    data={pokemonsFiltrados}
+                    keyExtractor={(item) => String(item.id)}
+                    renderItem={({ item }) => (
+                        <PokemonCard
+                            item={item}
+                            onAbrirDetalhe={(pokemonSelecionado) => {
+                                navigation.navigate('PokemonScreen', { id: pokemonSelecionado.id });
+                            }}
+                        />
+                    )}
+                    contentContainerStyle={styles.lista}
+                    showsVerticalScrollIndicator={false}
+                    refreshing={atualizando}
+                    onRefresh={() => {
+                        setAtualizando(true);
+                        carregarDados(tipoSelecionado.nome, true);
+                    }}
+                    ListEmptyComponent={
+                        <View style={styles.vazioContainer}>
+                            <Ionicons name="search-outline" size={32} color={cores.textoSecundario} />
+                            <Text style={styles.textoStatus}>Nenhum Pokémon encontrado.</Text>
+                        </View>
+                    }
+                />
+            )}
+
+            {/* MODAL POPOVER COMPACTO E SEM ROLAGEM PESADA */}
             <Modal
                 visible={modalFiltro !== null}
                 transparent
                 animationType="fade"
                 onRequestClose={() => setModalFiltro(null)}
             >
-                <Pressable style={styles.modalOverlay} onPress={() => setModalFiltro(null)}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitulo}>
-                            {modalFiltro === 'geracao' ? 'Filtrar por Geração' : 'Filtrar por Tipo'}
-                        </Text>
+                <Pressable style={styles.modalBackdrop} onPress={() => setModalFiltro(null)}>
+                    <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
-                        {modalFiltro === 'geracao'
-                            ? GERACOES.map((gen) => (
-                                <TouchableOpacity
-                                    key={gen.id}
-                                    style={[
-                                        styles.modalOpcao,
-                                        geracaoSelecionada.id === gen.id && styles.modalOpcaoAtiva,
-                                    ]}
-                                    onPress={() => {
-                                        setGeracaoSelecionada(gen);
-                                        setModalFiltro(null);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.modalTextoOpcao,
-                                            geracaoSelecionada.id === gen.id && styles.modalTextoAtivo,
-                                        ]}
-                                    >
-                                        {gen.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))
-                            : tiposDisponiveis.map((tipo) => (
-                                <TouchableOpacity
-                                    key={tipo}
-                                    style={[
-                                        styles.modalOpcao,
-                                        tipoSelecionado === tipo && styles.modalOpcaoAtiva,
-                                    ]}
-                                    onPress={() => {
-                                        setTipoSelecionado(tipo);
-                                        setModalFiltro(null);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.modalTextoOpcao,
-                                            tipoSelecionado === tipo && styles.modalTextoAtivo,
-                                        ]}
-                                    >
-                                        {tipo}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                    </View>
+                    <Pressable style={styles.popoverCard} onPress={(e) => e.stopPropagation()}>
+                        <View style={styles.popoverHeader}>
+                            <Text style={styles.popoverTitulo}>
+                                {modalFiltro === 'geracao' ? 'Filtrar por Geração' : 'Filtrar por Elemento'}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setModalFiltro(null)}
+                                style={styles.botaoFechar}
+                            >
+                                <Ionicons name="close" size={18} color={cores.texto} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {modalFiltro === 'geracao' ? (
+                            <View style={styles.gridGeracoes}>
+                                {GERACOES.map((gen) => {
+                                    const ativa = geracaoSelecionada.id === gen.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={gen.id}
+                                            activeOpacity={0.75}
+                                            onPress={() => {
+                                                setGeracaoSelecionada(gen);
+                                                setModalFiltro(null);
+                                            }}
+                                            style={[
+                                                styles.itemGeracao,
+                                                ativa && {
+                                                    borderColor: gen.cor,
+                                                    backgroundColor: `${gen.cor}1A`,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={styles.itemGeracaoLinha}>
+                                                <Text style={[styles.itemGeracaoRegiao, ativa && { color: gen.cor }]}>
+                                                    {gen.regiao}
+                                                </Text>
+                                                {ativa && <Ionicons name="checkmark-circle" size={15} color={gen.cor} />}
+                                            </View>
+                                            <Text style={styles.itemGeracaoMeta}>
+                                                {gen.label} • #{gen.faixa}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        ) : (
+                            <View style={styles.gridTipos}>
+                                {TIPOS_OFICIAIS.map((tipo) => {
+                                    const ativo = tipoSelecionado.nome === tipo.nome;
+                                    return (
+                                        <TouchableOpacity
+                                            key={tipo.nome}
+                                            activeOpacity={0.75}
+                                            onPress={() => {
+                                                setTipoSelecionado(tipo);
+                                                setModalFiltro(null);
+                                            }}
+                                            style={[
+                                                styles.itemTipo,
+                                                ativo && {
+                                                    borderColor: tipo.cor,
+                                                    backgroundColor: `${tipo.cor}24`,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={[styles.pontoCor, { backgroundColor: tipo.cor }]} />
+                                            <Text
+                                                style={[
+                                                    styles.itemTipoTexto,
+                                                    ativo && { color: cores.texto, fontWeight: '700' },
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {tipo.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </Pressable>
                 </Pressable>
             </Modal>
         </View>
@@ -359,212 +394,114 @@ const styles = StyleSheet.create({
     },
     centralizado: {
         flex: 1,
-        backgroundColor: cores.fundo,
         justifyContent: 'center',
         alignItems: 'center',
         padding: espacos.grande,
     },
-    headerPokedex: {
-        borderRadius: bordas.raio + 8,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.14)',
-        borderTopColor: 'rgba(255, 255, 255, 0.25)',
-        padding: espacos.medio,
+    headerContainer: {
         marginBottom: espacos.pequeno + 2,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.45,
-        shadowRadius: 14,
-        elevation: 8,
-    },
-    headerLinhaPrincipal: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         gap: 10,
     },
-    lenteAnelExterno: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        padding: 3,
-        backgroundColor: '#E5E7EB',
-        shadowColor: '#38BDF8',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.55,
-        shadowRadius: 10,
-        elevation: 6,
+    linhaBusca: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
-    lenteVidro: {
-        flex: 1,
-        borderRadius: 21,
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    lenteReflexoPrincipal: {
-        position: 'absolute',
-        top: 5,
-        left: 7,
-        width: 12,
-        height: 8,
-        borderRadius: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.85)',
-        transform: [{ rotate: '-25deg' }],
-    },
-    lenteReflexoSecundario: {
-        position: 'absolute',
-        bottom: 6,
-        right: 7,
-        width: 5,
-        height: 5,
-        borderRadius: 2.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    },
-    grupoFiltros: {
+    caixaBusca: {
         flex: 1,
         flexDirection: 'row',
+        alignItems: 'center',
         gap: 8,
-    },
-    botaoFiltroWrapper: {
-        flex: 1,
-        borderRadius: bordas.raio,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 6,
-        elevation: 4,
-    },
-    botaoFiltro: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 11,
-        paddingHorizontal: 12,
-        borderRadius: bordas.raio,
+        height: 44,
+        backgroundColor: cores.superficie,
+        borderRadius: 14,
+        paddingHorizontal: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.14)',
-        borderTopColor: 'rgba(255, 255, 255, 0.28)',
-    },
-    botaoFiltroAtivo: {
-        borderColor: cores.primaria,
-        borderTopColor: '#FB923C',
-    },
-    textoFiltro: {
-        color: cores.texto,
-        fontSize: fontes.pequena,
-        fontWeight: '700',
-        textTransform: 'capitalize',
-        flex: 1,
-    },
-    setaMini: {
-        color: 'rgba(255, 255, 255, 0.65)',
-        fontSize: 12,
-        marginLeft: 4,
-    },
-    grupoDireita: {
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 9,
-    },
-    botaoQuadrado: {
-        width: 28,
-        height: 24,
-        borderRadius: 7,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.18)',
-        borderTopColor: 'rgba(255, 255, 255, 0.32)',
-        backgroundColor: '#25252C',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    botaoQuadradoAtivo: {
-        borderColor: cores.primaria,
-        backgroundColor: cores.primariaClara,
-    },
-    iconeBusca: {
-        color: cores.texto,
-        fontSize: 14,
-        fontWeight: 'bold',
-        lineHeight: 16,
-    },
-    losangoShiny: {
-        width: 16,
-        height: 16,
-        backgroundColor: cores.primaria,
-        borderRadius: 4,
-        transform: [{ rotate: '45deg' }],
-        borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.85)',
-        shadowColor: cores.primaria,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.7,
-        shadowRadius: 6,
-    },
-    losangoShinyAtivo: {
-        backgroundColor: '#FACC15',
-        shadowColor: '#FACC15',
-        transform: [{ rotate: '45deg' }, { scale: 1.18 }],
-    },
-    headerRodape: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 10,
-        position: 'relative',
-    },
-    ledsStatus: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    ledCentral: {
-        width: 14,
-        height: 14,
-        borderRadius: 4,
-        borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.22)',
-        backgroundColor: '#1F2937',
-    },
-    ledCentralAtivo: {
-        backgroundColor: '#22C55E',
-        borderColor: '#86EFAC',
-        shadowColor: '#22C55E',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 8,
-    },
-    contadorTexto: {
-        position: 'absolute',
-        right: 0,
-        color: cores.textoSecundario,
-        fontSize: 11,
-        fontWeight: '600',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     inputBusca: {
-        marginTop: espacos.pequeno + 4,
-        backgroundColor: '#0E0E11',
+        flex: 1,
         color: cores.texto,
         fontSize: fontes.normal,
-        paddingHorizontal: espacos.medio,
-        paddingVertical: 9,
-        borderRadius: bordas.raio,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.14)',
+        outlineStyle: 'none',
     },
-    tracoDivisor: {
-        width: '32%',
-        height: 3,
-        backgroundColor: 'rgba(255, 255, 255, 0.16)',
-        marginBottom: espacos.pequeno + 6,
-        borderRadius: 2,
+    linhaFiltros: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    chipFiltro: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        height: 36,
+        paddingHorizontal: 10,
+        borderRadius: 11,
+        backgroundColor: cores.superficie,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.09)',
+    },
+    chipShiny: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        height: 36,
+        paddingHorizontal: 12,
+        borderRadius: 11,
+        backgroundColor: cores.superficie,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.09)',
+    },
+    chipShinyAtivo: {
+        borderColor: 'rgba(250, 204, 21, 0.55)',
+        backgroundColor: 'rgba(250, 204, 21, 0.14)',
+    },
+    textoChipFiltro: {
+        color: cores.texto,
+        fontSize: fontes.pequena,
+        fontWeight: '600',
+    },
+    pontoCor: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    barraStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 2,
+    },
+    textoContador: {
+        color: cores.textoSecundario,
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    botaoReset: {
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+    },
+    textoReset: {
+        color: cores.primaria,
+        fontSize: 12,
+        fontWeight: '700',
     },
     lista: {
         paddingBottom: espacos.grande,
+    },
+    vazioContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 48,
+        gap: 8,
     },
     textoStatus: {
         color: cores.textoSecundario,
         fontSize: fontes.normal,
         textAlign: 'center',
-        marginTop: espacos.medio,
     },
     textoErro: {
         color: cores.erro,
@@ -583,50 +520,98 @@ const styles = StyleSheet.create({
         fontSize: fontes.normal,
         fontWeight: '600',
     },
-    modalOverlay: {
+    // Modal Popover Flutuante
+    modalBackdrop: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.78)',
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: espacos.grande,
-    },
-    modalCard: {
-        width: '100%',
-        maxWidth: 340,
-        backgroundColor: '#18181C',
-        borderRadius: bordas.raio + 6,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)',
         padding: espacos.medio,
     },
-    modalTitulo: {
+    popoverCard: {
+        width: '100%',
+        maxWidth: 420,
+        backgroundColor: '#18181D',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.14)',
+        padding: espacos.medio + 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.5,
+        shadowRadius: 24,
+        elevation: 12,
+    },
+    popoverHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14,
+    },
+    popoverTitulo: {
         color: cores.texto,
         fontSize: fontes.grande,
         fontWeight: '700',
-        marginBottom: espacos.medio,
-        textAlign: 'center',
     },
-    modalOpcao: {
-        paddingVertical: 12,
-        paddingHorizontal: espacos.medio,
-        borderRadius: bordas.raio,
-        marginBottom: 6,
-        backgroundColor: '#101013',
+    botaoFechar: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    gridGeracoes: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    itemGeracao: {
+        width: '48.5%',
+        backgroundColor: '#111115',
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: 'rgba(255, 255, 255, 0.07)',
     },
-    modalOpcaoAtiva: {
-        backgroundColor: cores.primariaClara,
-        borderColor: cores.primaria,
+    itemGeracaoLinha: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 2,
     },
-    modalTextoOpcao: {
+    itemGeracaoRegiao: {
         color: cores.texto,
         fontSize: fontes.normal,
-        fontWeight: '600',
-        textTransform: 'capitalize',
-    },
-    modalTextoAtivo: {
-        color: cores.primaria,
         fontWeight: '700',
+    },
+    itemGeracaoMeta: {
+        color: cores.textoSecundario,
+        fontSize: 11,
+    },
+    gridTipos: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 7,
+    },
+    itemTipo: {
+        width: '31.5%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 7,
+        backgroundColor: '#111115',
+        borderRadius: 10,
+        paddingVertical: 9,
+        paddingHorizontal: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.07)',
+    },
+    itemTipoTexto: {
+        color: cores.textoSecundario,
+        fontSize: fontes.pequena,
+        fontWeight: '600',
+        flex: 1,
     },
 });

@@ -1,9 +1,13 @@
-import { request } from './api'
+import { request } from './api';
 
-// POST /auth/login -> { token }
-export const login = (email, senha) =>
-  request('/auth/login', { method: 'POST', body: { email, senha } })
+export const login = (name, password) =>
+  request('/auth/login', {
+    method: 'POST',
+    body: { name, password },
+  });
 
-// POST /auth/register -> { id, nome, email }
-export const cadastrar = ({ nome, email, senha }) =>
-  request('/auth/register', { method: 'POST', body: { nome, email, senha } })
+export const registrar = (name, password) =>
+  request('/auth/register', {
+    method: 'POST',
+    body: { name, password },
+  });

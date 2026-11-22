@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     StyleSheet,
     Text,
@@ -16,29 +16,113 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Paleta temática por tipo para dar vida aos cards e botões
 const CORES_TIPO = {
-    fire: { principal: '#F97316', fundo: 'rgba(249, 115, 22, 0.16)', borda: 'rgba(249, 115, 22, 0.45)' },
-    water: { principal: '#38BDF8', fundo: 'rgba(56, 189, 248, 0.16)', borda: 'rgba(56, 189, 248, 0.45)' },
-    grass: { principal: '#22C55E', fundo: 'rgba(34, 197, 94, 0.16)', borda: 'rgba(34, 197, 94, 0.45)' },
-    electric: { principal: '#FACC15', fundo: 'rgba(250, 204, 21, 0.16)', borda: 'rgba(250, 204, 21, 0.45)' },
-    psychic: { principal: '#EC4899', fundo: 'rgba(236, 72, 153, 0.16)', borda: 'rgba(236, 72, 153, 0.45)' },
-    ghost: { principal: '#A855F7', fundo: 'rgba(168, 85, 247, 0.16)', borda: 'rgba(168, 85, 247, 0.45)' },
-    poison: { principal: '#C084FC', fundo: 'rgba(192, 132, 252, 0.16)', borda: 'rgba(192, 132, 252, 0.45)' },
-    dragon: { principal: '#6366F1', fundo: 'rgba(99, 102, 241, 0.16)', borda: 'rgba(99, 102, 241, 0.45)' },
-    default: { principal: cores.primaria, fundo: cores.primariaClara, borda: 'rgba(217, 80, 50, 0.4)' },
+    normal: { principal: '#A8A77A', fundo: '#4A4936', borda: 'rgba(168, 167, 122, 0.55)' },
+    fire: { principal: '#FB923C', fundo: '#7C2D12', borda: 'rgba(251, 146, 60, 0.55)' },
+    fogo: { principal: '#FB923C', fundo: '#7C2D12', borda: 'rgba(251, 146, 60, 0.55)' },
+    water: { principal: '#38BDF8', fundo: '#0C4A6E', borda: 'rgba(56, 189, 248, 0.55)' },
+    agua: { principal: '#38BDF8', fundo: '#0C4A6E', borda: 'rgba(56, 189, 248, 0.55)' },
+    grass: { principal: '#4ADE80', fundo: '#14532D', borda: 'rgba(74, 222, 128, 0.55)' },
+    planta: { principal: '#4ADE80', fundo: '#14532D', borda: 'rgba(74, 222, 128, 0.55)' },
+    electric: { principal: '#FACC15', fundo: '#713F12', borda: 'rgba(250, 204, 21, 0.55)' },
+    eletrico: { principal: '#FACC15', fundo: '#713F12', borda: 'rgba(250, 204, 21, 0.55)' },
+    ice: { principal: '#67E8F9', fundo: '#164E63', borda: 'rgba(103, 232, 249, 0.55)' },
+    gelo: { principal: '#67E8F9', fundo: '#164E63', borda: 'rgba(103, 232, 249, 0.55)' },
+    fighting: { principal: '#F87171', fundo: '#7F1D1D', borda: 'rgba(248, 113, 113, 0.55)' },
+    lutador: { principal: '#F87171', fundo: '#7F1D1D', borda: 'rgba(248, 113, 113, 0.55)' },
+    poison: { principal: '#C084FC', fundo: '#581C87', borda: 'rgba(192, 132, 252, 0.55)' },
+    venenoso: { principal: '#C084FC', fundo: '#581C87', borda: 'rgba(192, 132, 252, 0.55)' },
+    ground: { principal: '#FBBF24', fundo: '#78350F', borda: 'rgba(251, 191, 36, 0.55)' },
+    terra: { principal: '#FBBF24', fundo: '#78350F', borda: 'rgba(251, 191, 36, 0.55)' },
+    flying: { principal: '#93C5FD', fundo: '#1E3A8A', borda: 'rgba(147, 197, 253, 0.55)' },
+    voador: { principal: '#93C5FD', fundo: '#1E3A8A', borda: 'rgba(147, 197, 253, 0.55)' },
+    psychic: { principal: '#F472B6', fundo: '#831843', borda: 'rgba(244, 114, 182, 0.55)' },
+    psiquico: { principal: '#F472B6', fundo: '#831843', borda: 'rgba(244, 114, 182, 0.55)' },
+    bug: { principal: '#A3E635', fundo: '#365314', borda: 'rgba(163, 230, 53, 0.55)' },
+    inseto: { principal: '#A3E635', fundo: '#365314', borda: 'rgba(163, 230, 53, 0.55)' },
+    rock: { principal: '#D6D3D1', fundo: '#44403C', borda: 'rgba(214, 211, 209, 0.55)' },
+    pedra: { principal: '#D6D3D1', fundo: '#44403C', borda: 'rgba(214, 211, 209, 0.55)' },
+    ghost: { principal: '#A855F7', fundo: '#3B0764', borda: 'rgba(168, 85, 247, 0.55)' },
+    fantasma: { principal: '#A855F7', fundo: '#3B0764', borda: 'rgba(168, 85, 247, 0.55)' },
+    dragon: { principal: '#818CF8', fundo: '#312E81', borda: 'rgba(129, 140, 248, 0.55)' },
+    dragao: { principal: '#818CF8', fundo: '#312E81', borda: 'rgba(129, 140, 248, 0.55)' },
+    dark: { principal: '#A1A1AA', fundo: '#27272A', borda: 'rgba(161, 161, 170, 0.55)' },
+    sombrio: { principal: '#A1A1AA', fundo: '#27272A', borda: 'rgba(161, 161, 170, 0.55)' },
+    steel: { principal: '#CBD5E1', fundo: '#334155', borda: 'rgba(203, 213, 225, 0.55)' },
+    aco: { principal: '#CBD5E1', fundo: '#334155', borda: 'rgba(203, 213, 225, 0.55)' },
+    fairy: { principal: '#F9A8D4', fundo: '#701A75', borda: 'rgba(249, 168, 212, 0.55)' },
+    fada: { principal: '#F9A8D4', fundo: '#701A75', borda: 'rgba(249, 168, 212, 0.55)' },
+    default: { principal: cores.primaria, fundo: '#2A1815', borda: 'rgba(217, 80, 50, 0.5)' },
 };
 
-function obterEstiloTipo(tipoString) {
-    if (!tipoString) return CORES_TIPO.default;
-    const primeiroTipo = tipoString.split('/')[0].trim().toLowerCase();
-    return CORES_TIPO[primeiroTipo] || CORES_TIPO.default;
+function normalizarChave(texto) {
+    return String(texto)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
+
+function extrairTipos(item) {
+    // 1. Suporte ao relacionamento N:N do Supabase (pokemon_types -> types.name)
+    if (Array.isArray(item.pokemon_types) && item.pokemon_types.length > 0) {
+        const nomes = item.pokemon_types
+            .map((pt) => pt?.types?.name || pt?.name)
+            .filter(Boolean);
+        if (nomes.length > 0) return nomes;
+    }
+
+    // 2. Suporte a array direto (item.types = ['Grass', 'Poison'])
+    if (Array.isArray(item.types) && item.types.length > 0) {
+        return item.types.map((t) => (typeof t === 'string' ? t : t?.name)).filter(Boolean);
+    }
+
+    // 3. Suporte à coluna texto (item.type = 'Grass / Poison' ou 'Grass')
+    if (item.type) {
+        if (Array.isArray(item.type)) return item.type.filter(Boolean);
+        const separados = String(item.type)
+            .split(/[/,|•-]+/)
+            .map((t) => t.trim())
+            .filter(Boolean);
+        if (separados.length > 0) return separados;
+    }
+
+    return ['Normal'];
+}
+
+function obterEstiloTipo(nomeTipo) {
+    const chave = normalizarChave(nomeTipo);
+    return CORES_TIPO[chave] || CORES_TIPO.default;
+}
+
+function obterSpriteAnimado(id, shiny) {
+    const pasta = shiny ? 'shiny/' : '';
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${pasta}${id}.gif`;
 }
 
 export default function PokemonCard({ item, onAbrirDetalhe }) {
     const [expandido, setExpandido] = useState(false);
+    const [falhouGif, setFalhouGif] = useState(false);
+
+    useEffect(() => {
+        setFalhouGif(false);
+    }, [item.id, item.shiny]);
+
     const numeroFormatado = String(item.id).padStart(2, '0');
-    const temaTipo = obterEstiloTipo(item.type);
+    const listaTipos = extrairTipos(item);
+
+    const temaPrimario = obterEstiloTipo(listaTipos[0]);
+    const temaSecundario = listaTipos[1] ? obterEstiloTipo(listaTipos[1]) : temaPrimario;
+
+    // Gradiente de fundo: se tiver 2 tipos, mistura as 2 cores; se tiver 1, cria degrade profundo
+    const coresGradienteFundo = listaTipos[1]
+        ? [temaPrimario.fundo, temaSecundario.fundo]
+        : [temaPrimario.fundo, '#121216'];
+
+    const uriImagem =
+        !falhouGif && item.id
+            ? obterSpriteAnimado(item.id, item.shiny)
+            : item.image;
 
     const alternarExpansao = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -47,150 +131,172 @@ export default function PokemonCard({ item, onAbrirDetalhe }) {
 
     return (
         <View style={[styles.cardWrapper, item.shiny && styles.cardShiny]}>
-            <LinearGradient
-                colors={['#1E1E22', '#141417']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cardGradiente}
-            >
-                {/* Visão Compacta Padrão */}
-                {!expandido ? (
-                    <TouchableOpacity
-                        style={styles.cardCompacto}
-                        activeOpacity={0.85}
-                        onPress={alternarExpansao}
+            {!expandido ? (
+                /* MODO COMPACTO (Fiel ao wireframe 01-Pokedex) */
+                <TouchableOpacity
+                    style={styles.cardCompacto}
+                    activeOpacity={0.85}
+                    onPress={alternarExpansao}
+                >
+                    {/* Caixa Esquerda inteira colorida com o Tipo / Gradiente */}
+                    <LinearGradient
+                        colors={coresGradienteFundo}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.colunaImagem}
                     >
-                        {/* Coluna Esquerda: Imagem com brilho radial sutil da cor do tipo */}
-                        <View style={styles.colunaImagem}>
-                            <View
-                                style={[
-                                    styles.auraTipo,
-                                    { backgroundColor: temaTipo.fundo },
-                                ]}
+                        {uriImagem ? (
+                            <Image
+                                source={{ uri: uriImagem }}
+                                resizeMode="contain"
+                                style={styles.imagemCompacta}
+                                onError={() => setFalhouGif(true)}
                             />
-                            {item.image ? (
-                                <Image
-                                    source={{ uri: item.image }}
-                                    resizeMode="contain"
-                                    style={styles.imagemCompacta}
-                                />
-                            ) : (
-                                <Text style={styles.semImagem}>?</Text>
-                            )}
+                        ) : (
+                            <Text style={styles.semImagem}>?</Text>
+                        )}
+                    </LinearGradient>
+
+                    {/* Divisória Vertical */}
+                    <View style={styles.divisorVertical} />
+
+                    {/* Coluna Direita com Nome, Número e Pílulas de Tipo */}
+                    <View style={styles.colunaDados}>
+                        <View style={styles.linhaSuperior}>
+                            <Text style={styles.nome} numberOfLines={1}>
+                                {item.name}
+                            </Text>
+                            <Text style={styles.numero}>{numeroFormatado}</Text>
                         </View>
 
-                        {/* Divisória Vertical metálica */}
-                        <View style={styles.divisorVertical} />
-
-                        {/* Coluna Direita: Nome + 01 em cima | Pílula de Tipo + Chevron embaixo */}
-                        <View style={styles.colunaDados}>
-                            <View style={styles.linhaSuperior}>
-                                <Text style={styles.nome} numberOfLines={1}>
-                                    {item.name}
-                                </Text>
-                                <Text style={styles.numero}>{numeroFormatado}</Text>
+                        <View style={styles.linhaInferior}>
+                            <View style={styles.grupoPilulas}>
+                                {listaTipos.map((tipoNome, index) => {
+                                    const tema = obterEstiloTipo(tipoNome);
+                                    return (
+                                        <View
+                                            key={`${tipoNome}-${index}`}
+                                            style={[
+                                                styles.pilulaTipo,
+                                                {
+                                                    backgroundColor: `${tema.fundo}CC`,
+                                                    borderColor: tema.borda,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={[styles.pontoTipo, { backgroundColor: tema.principal }]} />
+                                            <Text style={[styles.textoTipo, { color: tema.principal }]}>
+                                                {tipoNome}
+                                            </Text>
+                                        </View>
+                                    );
+                                })}
                             </View>
 
-                            <View style={styles.linhaInferior}>
-                                <LinearGradient
-                                    colors={[temaTipo.fundo, 'rgba(13, 13, 13, 0.6)']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={[styles.pilulaTipo, { borderColor: temaTipo.borda }]}
-                                >
-                                    <View
-                                        style={[styles.pontoTipo, { backgroundColor: temaTipo.principal }]}
-                                    />
-                                    <Text style={[styles.textoTipo, { color: temaTipo.principal }]}>
-                                        {item.type || 'Normal'}
-                                    </Text>
-                                </LinearGradient>
-
-                                {item.shiny && (
-                                    <View style={styles.badgeShiny}>
-                                        <Text style={styles.textoShiny}>✦ SHINY</Text>
-                                    </View>
-                                )}
-
-                                <View style={styles.botaoChevron}>
-                                    <Text style={styles.chevron}>⌄</Text>
+                            {item.shiny && (
+                                <View style={styles.badgeShiny}>
+                                    <Text style={styles.textoShiny}>✦</Text>
                                 </View>
+                            )}
+
+                            <View style={styles.botaoChevron}>
+                                <Text style={styles.chevron}>⌄</Text>
                             </View>
                         </View>
-                    </TouchableOpacity>
-                ) : (
-                    /* Visão Expandida Fiel ao Bloco Intermediário do Wireframe ("Muda a página") */
-                    <View style={styles.cardExpandido}>
-                        {/* Topo: Palco com sprite maior e botão de recolher */}
-                        <TouchableOpacity
+                    </View>
+                </TouchableOpacity>
+            ) : (
+                /* MODO EXPANDIDO (Fiel ao bloco intermediário do wireframe) */
+                <View style={styles.cardExpandido}>
+                    {/* Topo inteiro preenchido com a cor / gradiente do tipo do Pokémon */}
+                    <TouchableOpacity
+                        activeOpacity={0.92}
+                        onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
+                    >
+                        <LinearGradient
+                            colors={coresGradienteFundo}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
                             style={styles.palcoExpandido}
-                            activeOpacity={0.9}
-                            onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
                         >
-                            <View
-                                style={[
-                                    styles.auraExpandida,
-                                    { backgroundColor: temaTipo.fundo },
-                                ]}
-                            />
-                            {item.image && (
+                            {/* Reflexo suave no fundo para destacar o sprite animado */}
+                            <View style={styles.luzCentralPalco} />
+
+                            {uriImagem ? (
                                 <Image
-                                    source={{ uri: item.image }}
+                                    source={{ uri: uriImagem }}
                                     resizeMode="contain"
                                     style={styles.imagemExpandida}
+                                    onError={() => setFalhouGif(true)}
                                 />
+                            ) : null}
+
+                            {item.shiny && (
+                                <View style={styles.tagShinyExpandida}>
+                                    <Text style={styles.textoShinyExpandida}>✦ SHINY</Text>
+                                </View>
                             )}
 
                             <TouchableOpacity
                                 style={styles.botaoRecolher}
                                 onPress={alternarExpansao}
+                                hitSlop={8}
                             >
                                 <Text style={styles.chevronRecolher}>⌃</Text>
                             </TouchableOpacity>
-                        </TouchableOpacity>
+                        </LinearGradient>
+                    </TouchableOpacity>
 
-                        {/* Barra Inferior do Card Expandido: Nome #01 | Tipo | Habilidades -> Abre 02-Pokémon */}
-                        <TouchableOpacity
-                            style={styles.rodapeExpandido}
-                            activeOpacity={0.85}
-                            onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
-                        >
-                            <View style={styles.blocoEsquerdoExpandido}>
-                                <Text style={styles.nomeExpandido}>
-                                    {item.name} <Text style={styles.numeroExpandido}>#{numeroFormatado}</Text>
-                                </Text>
+                    {/* Rodapé Escuro com Nome #01, Pílulas de Tipo e Habilidades */}
+                    <TouchableOpacity
+                        style={styles.rodapeExpandido}
+                        activeOpacity={0.85}
+                        onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
+                    >
+                        <View style={styles.blocoEsquerdoExpandido}>
+                            <Text style={styles.nomeExpandido}>
+                                {item.name} <Text style={styles.numeroExpandido}>#{numeroFormatado}</Text>
+                            </Text>
 
-                                <View
-                                    style={[
-                                        styles.pilulaTipo,
-                                        {
-                                            backgroundColor: temaTipo.fundo,
-                                            borderColor: temaTipo.borda,
-                                            marginTop: 6,
-                                        },
-                                    ]}
-                                >
-                                    <Text style={[styles.textoTipo, { color: temaTipo.principal }]}>
-                                        {item.type || 'Normal'}
-                                    </Text>
-                                </View>
+                            <View style={[styles.grupoPilulas, { marginTop: 8 }]}>
+                                {listaTipos.map((tipoNome, index) => {
+                                    const tema = obterEstiloTipo(tipoNome);
+                                    return (
+                                        <View
+                                            key={`${tipoNome}-exp-${index}`}
+                                            style={[
+                                                styles.pilulaTipo,
+                                                {
+                                                    backgroundColor: `${tema.fundo}CC`,
+                                                    borderColor: tema.borda,
+                                                },
+                                            ]}
+                                        >
+                                            <View style={[styles.pontoTipo, { backgroundColor: tema.principal }]} />
+                                            <Text style={[styles.textoTipo, { color: tema.principal }]}>
+                                                {tipoNome}
+                                            </Text>
+                                        </View>
+                                    );
+                                })}
                             </View>
+                        </View>
 
-                            <View style={styles.blocoHabilidades}>
-                                <Text style={styles.labelHabilidade}>Habilidades</Text>
-                                <Text style={styles.valorHabilidade}>Ver ficha completa</Text>
-                                <Text style={styles.linkAbrirPagina}>Abrir página ›</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </LinearGradient>
+                        <View style={styles.blocoHabilidades}>
+                            <Text style={styles.labelHabilidade}>Habilidades</Text>
+                            <Text style={styles.valorHabilidade}>Ver ficha completa</Text>
+                            <Text style={styles.linkAbrirPagina}>Abrir página ›</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     cardWrapper: {
+        backgroundColor: '#16161A',
         borderRadius: bordas.raio + 6,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.12)',
@@ -205,45 +311,36 @@ const styles = StyleSheet.create({
     cardShiny: {
         borderColor: 'rgba(250, 204, 21, 0.55)',
     },
-    cardGradiente: {
-        width: '100%',
-    },
     cardCompacto: {
         flexDirection: 'row',
         alignItems: 'stretch',
         minHeight: 96,
     },
     colunaImagem: {
-        width: 102,
+        width: 104,
         justifyContent: 'center',
         alignItems: 'center',
-        position: 'relative',
-        backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    },
-    auraTipo: {
-        position: 'absolute',
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        padding: 8,
     },
     imagemCompacta: {
-        width: 74,
-        height: 74,
+        width: 68,
+        height: 68,
     },
     semImagem: {
-        color: cores.textoSecundario,
+        color: cores.texto,
         fontSize: fontes.titulo,
         fontWeight: 'bold',
     },
     divisorVertical: {
         width: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.14)',
     },
     colunaDados: {
         flex: 1,
         paddingHorizontal: espacos.medio,
         paddingVertical: 12,
         justifyContent: 'space-between',
+        backgroundColor: '#16161A',
     },
     linhaSuperior: {
         flexDirection: 'row',
@@ -270,46 +367,50 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: espacos.pequeno,
     },
+    grupoPilulas: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
     pilulaTipo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 5,
-        borderRadius: 10,
+        gap: 5,
+        paddingHorizontal: 11,
+        paddingVertical: 4,
+        borderRadius: 9,
         borderWidth: 1,
     },
     pontoTipo: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
     },
     textoTipo: {
-        fontSize: fontes.pequena,
+        fontSize: fontes.pequena - 1,
         fontWeight: '700',
         textTransform: 'capitalize',
     },
     badgeShiny: {
-        marginLeft: 8,
-        paddingHorizontal: 8,
+        marginLeft: 6,
+        paddingHorizontal: 7,
         paddingVertical: 4,
         borderRadius: 8,
-        backgroundColor: 'rgba(250, 204, 21, 0.14)',
+        backgroundColor: 'rgba(250, 204, 21, 0.16)',
         borderWidth: 1,
-        borderColor: 'rgba(250, 204, 21, 0.4)',
+        borderColor: 'rgba(250, 204, 21, 0.45)',
     },
     textoShiny: {
         color: '#FACC15',
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '800',
-        letterSpacing: 0.6,
     },
     botaoChevron: {
         marginLeft: 'auto',
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: 'rgba(255, 255, 255, 0.07)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -319,28 +420,45 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginTop: -6,
     },
-    // Estilos do Card Expandido (conforme wireframe)
+    // Modo Expandido
     cardExpandido: {
         width: '100%',
     },
     palcoExpandido: {
-        height: 135,
+        height: 155,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.28)',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.14)',
         position: 'relative',
     },
-    auraExpandida: {
+    luzCentralPalco: {
         position: 'absolute',
-        width: 110,
-        height: 110,
-        borderRadius: 55,
+        width: 115,
+        height: 115,
+        borderRadius: 57.5,
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
     },
     imagemExpandida: {
-        width: 112,
-        height: 112,
+        width: 96,
+        height: 96,
+    },
+    tagShinyExpandida: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        borderWidth: 1,
+        borderColor: 'rgba(250, 204, 21, 0.5)',
+    },
+    textoShinyExpandida: {
+        color: '#FACC15',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.8,
     },
     botaoRecolher: {
         position: 'absolute',
@@ -349,7 +467,9 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'rgba(0, 0, 0, 0.35)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.18)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -364,13 +484,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: espacos.medio,
+        backgroundColor: '#16161A',
     },
     blocoEsquerdoExpandido: {
         flex: 1,
     },
     nomeExpandido: {
         color: cores.texto,
-        fontSize: fontes.grande,
+        fontSize: fontes.grande + 1,
         fontWeight: '700',
         textTransform: 'capitalize',
     },
@@ -382,7 +503,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
         paddingLeft: 12,
         borderLeftWidth: 1,
-        borderLeftColor: 'rgba(255, 255, 255, 0.08)',
+        borderLeftColor: 'rgba(255, 255, 255, 0.1)',
     },
     labelHabilidade: {
         color: cores.textoSecundario,

@@ -1,32 +1,27 @@
-const API_URL = 'http://localhost:3000';
+const BASE_URL = 'http://localhost:3000';
 
-async function request(endpoint, options = {}) {
-  const { token, headers, ...rest } = options;
+export const request = async (caminho, { method = 'GET', body, token } = {}) => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    ...rest,
-  });
-
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const mensagemErro = data?.erro || data?.error || 'Erro ao comunicar com o servidor.';
-    throw new Error(mensagemErro);
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
-  return data;
-}
+  const response = await fetch(`${BASE_URL}${caminho}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-export const pokemonService = {
-  listarTodos: () => request('/pokemons'),
-  buscarPorId: (id) => request(`/pokemons/${id}`),
-  alternarFavorito: (id, token) =>
-    request(`/pokemons/${id}/favorite`, { method: 'PUT', token }),
-  alternarCapturado: (id, token) =>
-    request(`/pokemons/${id}/catch`, { method: 'PUT', token }),
+  const dados = response.status === 204 ? null : await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const erro = new Error(dados?.erro || dados?.error || 'Erro inesperado');
+    erro.status = response.status;
+    throw erro;
+  }
+
+  return dados;
 };

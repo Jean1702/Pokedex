@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     StyleSheet,
     Text,
@@ -6,50 +6,27 @@ import {
     TouchableOpacity,
     Animated,
     Easing,
-    Dimensions,
     Image,
+    useWindowDimensions,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
 
-const { width, height } = Dimensions.get('window');
-
-// Lâminas de grama orgânicas em 3 camadas de profundidade
-const LAMINAS_GRAMA = Array.from({ length: 28 }, (_, i) => {
-    const camada = i % 3;
-    const altura =
-        camada === 0
-            ? 105 + (i % 4) * 18
-            : camada === 1
-                ? 78 + (i % 3) * 15
-                : 52 + (i % 4) * 12;
-
-    return {
-        id: i,
-        left: (width / 26) * i - 14,
-        altura,
-        larguraBase: camada === 0 ? 19 : camada === 1 ? 15 : 12,
-        camada,
-        atraso: (i * 130) % 1800,
-        inclinacaoBase: ((i % 5) - 2) * 4,
-    };
-});
-
-// Esporos de luz flutuando sobre o gramado
-const ESPOROS = Array.from({ length: 14 }, (_, i) => ({
-    id: i,
-    left: (width / 14) * i + 8,
-    tamanho: 2.5 + (i % 3) * 1.5,
-    duracao: 4000 + (i % 4) * 1100,
-    atraso: i * 320,
-}));
+const POKEMONS_VITRINE = [
+    { id: 25, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png' },
+    { id: 6, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png' },
+    { id: 9, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/9.png' },
+    { id: 3, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/3.png' },
+    { id: 94, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png' },
+    { id: 150, sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png' },
+];
 
 function LaminaGrama({ left, altura, larguraBase, camada, atraso, inclinacaoBase }) {
     const vento = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        Animated.loop(
+        const loop = Animated.loop(
             Animated.sequence([
                 Animated.delay(atraso),
                 Animated.timing(vento, {
@@ -71,7 +48,9 @@ function LaminaGrama({ left, altura, larguraBase, camada, atraso, inclinacaoBase
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
+        );
+        loop.start();
+        return () => loop.stop();
     }, [vento, atraso, camada]);
 
     const rotacaoVento = vento.interpolate({
@@ -118,12 +97,12 @@ function LaminaGrama({ left, altura, larguraBase, camada, atraso, inclinacaoBase
     );
 }
 
-function EsporoLuz({ left, tamanho, duracao, atraso }) {
+function EsporoLuz({ left, tamanho, duracao, atraso, screenHeight }) {
     const subida = useRef(new Animated.Value(0)).current;
     const opacidade = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        Animated.loop(
+        const loop = Animated.loop(
             Animated.sequence([
                 Animated.delay(atraso),
                 Animated.parallel([
@@ -152,12 +131,14 @@ function EsporoLuz({ left, tamanho, duracao, atraso }) {
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
+        );
+        loop.start();
+        return () => loop.stop();
     }, [subida, opacidade, duracao, atraso]);
 
     const translateY = subida.interpolate({
         inputRange: [0, 1],
-        outputRange: [height * 0.92, height * 0.28],
+        outputRange: [screenHeight * 0.92, screenHeight * 0.25],
     });
 
     return (
@@ -179,72 +160,51 @@ function EsporoLuz({ left, tamanho, duracao, atraso }) {
 }
 
 export default function HomeScreen({ navigation }) {
+    const { width, height } = useWindowDimensions();
+
     const escalaBotao = useRef(new Animated.Value(1)).current;
     const pulsoRespiracao = useRef(new Animated.Value(1)).current;
     const pulsoAura = useRef(new Animated.Value(0.88)).current;
     const transicaoPokemon = useRef(new Animated.Value(1)).current;
     const flashBranco = useRef(new Animated.Value(0)).current;
-
-    const [listaPokemons, setListaPokemons] = useState([
-        {
-            id: 25,
-            sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
-        },
-        {
-            id: 6,
-            sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png',
-        },
-        {
-            id: 94,
-            sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png',
-        },
-        {
-            id: 150,
-            sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png',
-        },
-        {
-            id: 133,
-            sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png',
-        },
-    ]);
-
     const [indiceAtual, setIndiceAtual] = useState(0);
 
+    // Recalcula grama e partículas dinamicamente sempre que a janela redimensionar
+    const laminasGrama = useMemo(() => {
+        const quantidade = Math.max(24, Math.ceil(width / 16));
+        return Array.from({ length: quantidade }, (_, i) => {
+            const camada = i % 3;
+            const altura =
+                camada === 0
+                    ? 105 + (i % 4) * 18
+                    : camada === 1
+                        ? 78 + (i % 3) * 15
+                        : 52 + (i % 4) * 12;
+
+            return {
+                id: i,
+                left: (width / (quantidade - 2)) * i - 14,
+                altura,
+                larguraBase: camada === 0 ? 19 : camada === 1 ? 15 : 12,
+                camada,
+                atraso: (i * 130) % 1800,
+                inclinacaoBase: ((i % 5) - 2) * 4,
+            };
+        });
+    }, [width]);
+
+    const esporos = useMemo(() => {
+        return Array.from({ length: 14 }, (_, i) => ({
+            id: i,
+            left: (width / 14) * i + 8,
+            tamanho: 2.5 + (i % 3) * 1.5,
+            duracao: 4000 + (i % 4) * 1100,
+            atraso: i * 320,
+        }));
+    }, [width]);
+
     useEffect(() => {
-        let ativo = true;
-
-        async function buscarPokemons() {
-            try {
-                const resposta = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151');
-                const dados = await resposta.json();
-                if (!ativo || !dados?.results?.length) return;
-
-                const sorteados = [...dados.results]
-                    .sort(() => 0.5 - Math.random())
-                    .slice(0, 12)
-                    .map((item) => {
-                        const partes = item.url.split('/').filter(Boolean);
-                        const id = partes[partes.length - 1];
-                        return {
-                            id,
-                            sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`,
-                        };
-                    });
-
-                setListaPokemons(sorteados);
-            } catch {
-                // Fallback silencioso
-            }
-        }
-
-        buscarPokemons();
-        return () => {
-            ativo = false;
-        };
-    }, []);
-
-    useEffect(() => {
-        Animated.loop(
+        const animRespiracao = Animated.loop(
             Animated.sequence([
                 Animated.timing(pulsoRespiracao, {
                     toValue: 1.06,
@@ -259,9 +219,9 @@ export default function HomeScreen({ navigation }) {
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
+        );
 
-        Animated.loop(
+        const animAura = Animated.loop(
             Animated.sequence([
                 Animated.timing(pulsoAura, {
                     toValue: 1.16,
@@ -276,7 +236,15 @@ export default function HomeScreen({ navigation }) {
                     useNativeDriver: true,
                 }),
             ])
-        ).start();
+        );
+
+        animRespiracao.start();
+        animAura.start();
+
+        return () => {
+            animRespiracao.stop();
+            animAura.stop();
+        };
     }, [pulsoRespiracao, pulsoAura]);
 
     useEffect(() => {
@@ -294,7 +262,7 @@ export default function HomeScreen({ navigation }) {
                     useNativeDriver: true,
                 }),
             ]).start(() => {
-                setIndiceAtual((prev) => (prev + 1) % listaPokemons.length);
+                setIndiceAtual((prev) => (prev + 1) % POKEMONS_VITRINE.length);
 
                 Animated.parallel([
                     Animated.spring(transicaoPokemon, {
@@ -314,9 +282,9 @@ export default function HomeScreen({ navigation }) {
         }, 4200);
 
         return () => clearInterval(intervalo);
-    }, [listaPokemons.length, transicaoPokemon, flashBranco]);
+    }, [transicaoPokemon, flashBranco]);
 
-    const animarClique = (destino) => {
+    const entrarNaPokedex = () => {
         Animated.sequence([
             Animated.timing(escalaBotao, {
                 toValue: 0.94,
@@ -329,70 +297,60 @@ export default function HomeScreen({ navigation }) {
                 useNativeDriver: true,
             }),
         ]).start(() => {
-            navigation.navigate(destino);
+            navigation.navigate('PokedexScreen');
         });
     };
 
-    const pokemonAtual = listaPokemons[indiceAtual];
+    const pokemonAtual = POKEMONS_VITRINE[indiceAtual];
+    const tamanhoSprite = Math.min(185, height * 0.24);
 
     return (
         <View style={styles.container}>
-            {/* Gradiente atmosférico de fundo (escuro no topo -> verde floresta sutil na base) */}
             <LinearGradient
                 colors={[cores.fundo, '#0E1311', '#12241B']}
                 locations={[0, 0.65, 1]}
                 style={StyleSheet.absoluteFill}
             />
 
-            {/* Esporos luminosos */}
-            {ESPOROS.map((esporo) => (
+            {esporos.map((esporo) => (
                 <EsporoLuz
                     key={esporo.id}
                     left={esporo.left}
                     tamanho={esporo.tamanho}
                     duracao={esporo.duracao}
                     atraso={esporo.atraso}
+                    screenHeight={height}
                 />
             ))}
 
-            {/* Cabeçalho discreto no terço superior */}
-            <View style={styles.cabecalho}>
-                <Text style={styles.tag}>POKÉDEX SYSTEM</Text>
-                <Text style={styles.titulo}>Explore a Dex</Text>
-            </View>
+            {/* Layout Flexbox centralizado que nunca quebra no redimensionamento */}
+            <View style={styles.camadaCentral}>
+                <View style={styles.cabecalho}>
+                    <Text style={styles.tag}>POKÉDEX</Text>
+                    <Text style={styles.titulo}>Explore a Dex</Text>
+                </View>
 
-            {/* PALCO CENTRAL LITERAL (Centro exato da tela) */}
-            <View pointerEvents="none" style={styles.palcoCentral}>
-                <Animated.View
-                    style={[
-                        styles.haloExterno,
-                        { transform: [{ scale: pulsoAura }] },
-                    ]}
-                />
-                <Animated.View
-                    style={[
-                        styles.haloInterno,
-                        { transform: [{ scale: pulsoRespiracao }] },
-                    ]}
-                />
-                <Animated.View
-                    style={[
-                        styles.claraoTroca,
-                        {
-                            opacity: flashBranco,
-                            transform: [
-                                {
-                                    scale: flashBranco.interpolate({
-                                        inputRange: [0, 1],
-                                        outputRange: [0.5, 1.45],
-                                    }),
-                                },
-                            ],
-                        },
-                    ]}
-                />
+                {/* Pokémon exatamente no centro da tela */}
+                <View pointerEvents="none" style={styles.palcoCentral}>
+                    <Animated.View style={[styles.haloExterno, { transform: [{ scale: pulsoAura }] }]} />
+                    <Animated.View style={[styles.haloInterno, { transform: [{ scale: pulsoRespiracao }] }]} />
+                    <Animated.View
+                        style={[
+                            styles.claraoTroca,
+                            {
+                                opacity: flashBranco,
+                                transform: [
+                                    {
+                                        scale: flashBranco.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [0.5, 1.45],
+                                        }),
+                                    },
+                                ],
+                            },
+                        ]}
+                    />
 
-                {pokemonAtual && (
                     <Animated.View
                         style={{
                             opacity: transicaoPokemon,
@@ -412,44 +370,38 @@ export default function HomeScreen({ navigation }) {
                         <Image
                             source={{ uri: pokemonAtual.sprite }}
                             resizeMode="contain"
-                            style={styles.spritePokemon}
+                            style={{ width: tamanhoSprite, height: tamanhoSprite }}
                         />
                     </Animated.View>
-                )}
+                </View>
+
+                {/* Botão Glassmorphism logo abaixo */}
+                <Animated.View style={[styles.areaBotao, { transform: [{ scale: escalaBotao }] }]}>
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={entrarNaPokedex}
+                        style={styles.botaoTouch}
+                    >
+                        <BlurView intensity={35} tint="dark" style={styles.glassContainer}>
+                            <LinearGradient
+                                colors={[
+                                    'rgba(255, 255, 255, 0.16)',
+                                    'rgba(217, 80, 50, 0.24)',
+                                    'rgba(255, 255, 255, 0.05)',
+                                ]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.glassGradiente}
+                            >
+                                <Text style={styles.textoBotao}>Entrar</Text>
+                            </LinearGradient>
+                        </BlurView>
+                    </TouchableOpacity>
+                </Animated.View>
             </View>
 
-            {/* BOTÃO GLASSMORPHISM LOGO ABAIXO DO POKÉMON CENTRAL */}
-            <Animated.View
-                style={[
-                    styles.areaBotao,
-                    { transform: [{ scale: escalaBotao }] },
-                ]}
-            >
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => animarClique('PokedexScreen')}
-                    style={styles.botaoTouch}
-                >
-                    <BlurView intensity={35} tint="dark" style={styles.glassContainer}>
-                        <LinearGradient
-                            colors={[
-                                'rgba(255, 255, 255, 0.16)',
-                                'rgba(217, 80, 50, 0.22)',
-                                'rgba(255, 255, 255, 0.05)',
-                            ]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.glassGradiente}
-                        >
-                            <Text style={styles.textoBotao}>Entrar</Text>
-                        </LinearGradient>
-                    </BlurView>
-                </TouchableOpacity>
-            </Animated.View>
-
-            {/* Camadas de grama realista na base */}
             <View pointerEvents="none" style={styles.baseTerra} />
-            {LAMINAS_GRAMA.map((lamina) => (
+            {laminasGrama.map((lamina) => (
                 <LaminaGrama
                     key={lamina.id}
                     left={lamina.left}
@@ -468,22 +420,25 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: cores.fundo,
-        alignItems: 'center',
-        justifyContent: 'center',
         overflow: 'hidden',
     },
-    cabecalho: {
-        position: 'absolute',
-        top: height * 0.14,
+    camadaCentral: {
+        flex: 1,
         alignItems: 'center',
-        zIndex: 10,
+        justifyContent: 'center',
+        paddingHorizontal: espacos.grande,
+        zIndex: 12,
+    },
+    cabecalho: {
+        alignItems: 'center',
+        marginBottom: espacos.grande,
     },
     tag: {
         color: cores.primaria,
         fontSize: fontes.pequena,
         fontWeight: '700',
-        letterSpacing: 2.5,
-        marginBottom: espacos.pequeno,
+        letterSpacing: 3,
+        marginBottom: 6,
     },
     titulo: {
         color: cores.texto,
@@ -492,20 +447,17 @@ const styles = StyleSheet.create({
         letterSpacing: -0.5,
     },
     palcoCentral: {
-        position: 'absolute',
-        top: height * 0.5 - 115,
-        left: width * 0.5 - 115,
-        width: 230,
-        height: 230,
+        width: 220,
+        height: 220,
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 6,
+        marginVertical: espacos.pequeno,
     },
     haloExterno: {
         position: 'absolute',
-        width: 210,
-        height: 210,
-        borderRadius: 105,
+        width: 205,
+        height: 205,
+        borderRadius: 102.5,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
         shadowColor: '#FFFFFF',
         shadowOffset: { width: 0, height: 0 },
@@ -514,28 +466,22 @@ const styles = StyleSheet.create({
     },
     haloInterno: {
         position: 'absolute',
-        width: 145,
-        height: 145,
-        borderRadius: 72.5,
+        width: 140,
+        height: 140,
+        borderRadius: 70,
         backgroundColor: 'rgba(255, 255, 255, 0.16)',
     },
     claraoTroca: {
         position: 'absolute',
-        width: 165,
-        height: 165,
-        borderRadius: 82.5,
+        width: 160,
+        height: 160,
+        borderRadius: 80,
         backgroundColor: '#FFFFFF',
     },
-    spritePokemon: {
-        width: 185,
-        height: 185,
-    },
     areaBotao: {
-        position: 'absolute',
-        top: height * 0.5 + 125,
-        width: '78%',
-        maxWidth: 320,
-        zIndex: 15,
+        width: '100%',
+        maxWidth: 290,
+        marginTop: espacos.grande,
     },
     botaoTouch: {
         borderRadius: bordas.raio + 4,
