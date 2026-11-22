@@ -75,12 +75,12 @@ function extrairEvolucoes(noCadeia, lista = []) {
 }
 
 export const listarPokemons = (type) => {
-    const query = type && type !== 'Todos' ? `?type=${encodeURIComponent(type)}` : '';
-    return request(`/pokemons${query}`);
+  const query = type && type !== 'Todos' ? `?type=${encodeURIComponent(type)}` : '';
+  return request(`/pokemons${query}`);
 };
 
 export const buscarPokemonPorId = (id) =>
-    request(`/pokemons/${id}`);
+  request(`/pokemons/${id}`);
 
 export const buscarDetalhesCompletosPokemon = async (id) => {
     const dadosBase = await buscarPokemonPorId(id);
