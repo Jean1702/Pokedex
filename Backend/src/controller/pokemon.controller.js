@@ -2,10 +2,28 @@ const router = require('express').Router();
 const supabase = require('../db/supabase');
 const authMiddleware = require('../view/middleware/auth');
 
+function mapPokemonWithTypes(pokemon) {
+  const orderedTypes = Array.isArray(pokemon.pokemon_types)
+    ? pokemon.pokemon_types
+        .slice()
+        .sort((a, b) => a.slot - b.slot)
+        .map((pt) => pt.types?.name)
+        .filter(Boolean)
+    : [];
+
+  return {
+    id: pokemon.id,
+    name: pokemon.name,
+    image: pokemon.image,
+    shiny: Boolean(pokemon.shiny),
+    types: orderedTypes
+  };
+}
+
 async function upsertPokemonUser(pokemonId, userId, fields) {
   const { data: existente, error: fetchError } = await supabase
     .from('pokemon_user')
-    .select('id_pokemon, id_user')
+    .select('id, id_pokemon, id_user')
     .eq('id_pokemon', pokemonId)
     .eq('id_user', userId)
     .maybeSingle();
@@ -16,8 +34,7 @@ async function upsertPokemonUser(pokemonId, userId, fields) {
     return supabase
       .from('pokemon_user')
       .update(fields)
-      .eq('id_pokemon', pokemonId)
-      .eq('id_user', userId)
+      .eq('id', existente.id)
       .select()
       .single();
   }
@@ -63,17 +80,7 @@ router.get('/pokemons', async (req, res) => {
       return res.status(400).json({ erro: error.message, error: error.message });
     }
 
-    const formatted = data.map((pokemon) => ({
-      id: pokemon.id,
-      name: pokemon.name,
-      image: pokemon.image,
-      shiny: pokemon.shiny,
-      types: pokemon.pokemon_types
-        .sort((a, b) => a.slot - b.slot)
-        .map((pt) => pt.types.name),
-    }));
-
-    allPokemons = allPokemons.concat(formatted);
+    allPokemons = allPokemons.concat(data.map(mapPokemonWithTypes));
 
     if (data.length < BATCH_SIZE) {
       hasMore = false;
@@ -82,20 +89,13 @@ router.get('/pokemons', async (req, res) => {
     }
   }
 
-  if (req.query.type) {
-    const tipoBuscado = req.query.type.trim().toLowerCase();
-    allPokemons = allPokemons.filter((pokemon) =>
-      pokemon.types.some((t) => String(t).toLowerCase() === tipoBuscado)
-    );
-  }
-
   return res.status(200).json(allPokemons);
 });
 
 router.get('/pokemons/:id', async (req, res) => {
   const pokemonId = Number(req.params.id);
 
-  if (Number.isNaN(pokemonId)) {
+  if (!Number.isInteger(pokemonId) || pokemonId <= 0) {
     return res.status(400).json({ erro: 'ID inválido', error: 'ID inválido' });
   }
 
@@ -127,27 +127,27 @@ router.get('/pokemons/:id', async (req, res) => {
       if (!localPokemon) {
         return res.status(404).json({ erro: 'Pokémon não encontrado', error: 'Pokémon não encontrado' });
       }
-      return res.status(200).json({
-        ...localPokemon,
-        types: localPokemon.pokemon_types
-          .sort((a, b) => a.slot - b.slot)
-          .map((pt) => pt.types.name)
-      });
+      return res.status(200).json(mapPokemonWithTypes(localPokemon));
     }
 
     const apiData = await apiResponse.json();
+    const mappedLocal = localPokemon ? mapPokemonWithTypes(localPokemon) : null;
 
-    const types = localPokemon
-      ? localPokemon.pokemon_types.sort((a, b) => a.slot - b.slot).map((pt) => pt.types.name)
-      : apiData.types.sort((a, b) => a.slot - b.slot).map((t) => t.type.name);
+    const apiTypes = Array.isArray(apiData.types)
+      ? apiData.types
+          .slice()
+          .sort((a, b) => a.slot - b.slot)
+          .map((t) => t.type?.name)
+          .filter(Boolean)
+      : [];
 
     return res.status(200).json({
       ...apiData,
-      id: localPokemon ? localPokemon.id : apiData.id,
-      name: localPokemon ? localPokemon.name : apiData.name,
-      image: localPokemon ? localPokemon.image : apiData.sprites.front_default,
-      shiny: localPokemon ? localPokemon.shiny : false,
-      types
+      id: mappedLocal ? mappedLocal.id : apiData.id,
+      name: mappedLocal ? mappedLocal.name : apiData.name,
+      image: mappedLocal ? mappedLocal.image : apiData.sprites.front_default,
+      shiny: mappedLocal ? mappedLocal.shiny : false,
+      types: mappedLocal && mappedLocal.types.length > 0 ? mappedLocal.types : apiTypes
     });
   } catch (error) {
     return res.status(500).json({ erro: 'Erro ao buscar detalhes do Pokémon', error: 'Erro ao buscar detalhes do Pokémon' });
@@ -159,7 +159,7 @@ router.put('/pokemons/:id/favorite', authMiddleware, async (req, res) => {
   const { favority } = req.body;
   const userId = req.usuario.id;
 
-  if (Number.isNaN(pokemonId)) {
+  if (!Number.isInteger(pokemonId) || pokemonId <= 0) {
     return res.status(400).json({ erro: 'ID inválido', error: 'ID inválido' });
   }
 
@@ -178,7 +178,7 @@ router.put('/pokemons/:id/catch', authMiddleware, async (req, res) => {
   const { catch: isCaught } = req.body;
   const userId = req.usuario.id;
 
-  if (Number.isNaN(pokemonId)) {
+  if (!Number.isInteger(pokemonId) || pokemonId <= 0) {
     return res.status(400).json({ erro: 'ID inválido', error: 'ID inválido' });
   }
 

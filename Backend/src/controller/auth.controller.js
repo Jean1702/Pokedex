@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const supabase = require('../db'); 
+const supabase = require('../db/supabase')
 
 router.post('/auth/register', async (req, res) => {
   const { name, password } = req.body;

@@ -137,7 +137,7 @@ export default function PokedexScreen({ navigation }) {
                 <View style={styles.linhaBusca}>
                     <AvatarUser
                         tamanho={44}
-                        onPress={() => navigation.navigate(token ? 'UsuarioScreen' : 'LoginScreen')}
+                        onPress={() => navigation.navigate(token ? 'UserScreen' : 'LoginScreen')}
                     />
 
                     <View style={styles.caixaBusca}>
