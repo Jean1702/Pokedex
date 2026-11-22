@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Tarefas e Anotações",
-    "slug": "tarefas-anotacoes",
+    "name": "Pokedex",
+    "slug": "pokedex",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
