@@ -5,521 +5,582 @@ import {
     View,
     Image,
     TouchableOpacity,
-    LayoutAnimation,
-    Platform,
-    UIManager,
+    ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cores, fontes, espacos, bordas } from '../styles/theme';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { obterConfigTipo } from '../constants/tiposPokemon';
+import { cores, fontes, bordas } from '../styles/theme';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+const cacheHabilidades = new Map();
 
-const CORES_TIPO = {
-    normal: { principal: '#A8A77A', fundo: '#4A4936', borda: 'rgba(168, 167, 122, 0.55)' },
-    fire: { principal: '#FB923C', fundo: '#7C2D12', borda: 'rgba(251, 146, 60, 0.55)' },
-    fogo: { principal: '#FB923C', fundo: '#7C2D12', borda: 'rgba(251, 146, 60, 0.55)' },
-    water: { principal: '#38BDF8', fundo: '#0C4A6E', borda: 'rgba(56, 189, 248, 0.55)' },
-    agua: { principal: '#38BDF8', fundo: '#0C4A6E', borda: 'rgba(56, 189, 248, 0.55)' },
-    grass: { principal: '#4ADE80', fundo: '#14532D', borda: 'rgba(74, 222, 128, 0.55)' },
-    planta: { principal: '#4ADE80', fundo: '#14532D', borda: 'rgba(74, 222, 128, 0.55)' },
-    electric: { principal: '#FACC15', fundo: '#713F12', borda: 'rgba(250, 204, 21, 0.55)' },
-    eletrico: { principal: '#FACC15', fundo: '#713F12', borda: 'rgba(250, 204, 21, 0.55)' },
-    ice: { principal: '#67E8F9', fundo: '#164E63', borda: 'rgba(103, 232, 249, 0.55)' },
-    gelo: { principal: '#67E8F9', fundo: '#164E63', borda: 'rgba(103, 232, 249, 0.55)' },
-    fighting: { principal: '#F87171', fundo: '#7F1D1D', borda: 'rgba(248, 113, 113, 0.55)' },
-    lutador: { principal: '#F87171', fundo: '#7F1D1D', borda: 'rgba(248, 113, 113, 0.55)' },
-    poison: { principal: '#C084FC', fundo: '#581C87', borda: 'rgba(192, 132, 252, 0.55)' },
-    venenoso: { principal: '#C084FC', fundo: '#581C87', borda: 'rgba(192, 132, 252, 0.55)' },
-    ground: { principal: '#FBBF24', fundo: '#78350F', borda: 'rgba(251, 191, 36, 0.55)' },
-    terra: { principal: '#FBBF24', fundo: '#78350F', borda: 'rgba(251, 191, 36, 0.55)' },
-    flying: { principal: '#93C5FD', fundo: '#1E3A8A', borda: 'rgba(147, 197, 253, 0.55)' },
-    voador: { principal: '#93C5FD', fundo: '#1E3A8A', borda: 'rgba(147, 197, 253, 0.55)' },
-    psychic: { principal: '#F472B6', fundo: '#831843', borda: 'rgba(244, 114, 182, 0.55)' },
-    psiquico: { principal: '#F472B6', fundo: '#831843', borda: 'rgba(244, 114, 182, 0.55)' },
-    bug: { principal: '#A3E635', fundo: '#365314', borda: 'rgba(163, 230, 53, 0.55)' },
-    inseto: { principal: '#A3E635', fundo: '#365314', borda: 'rgba(163, 230, 53, 0.55)' },
-    rock: { principal: '#D6D3D1', fundo: '#44403C', borda: 'rgba(214, 211, 209, 0.55)' },
-    pedra: { principal: '#D6D3D1', fundo: '#44403C', borda: 'rgba(214, 211, 209, 0.55)' },
-    ghost: { principal: '#A855F7', fundo: '#3B0764', borda: 'rgba(168, 85, 247, 0.55)' },
-    fantasma: { principal: '#A855F7', fundo: '#3B0764', borda: 'rgba(168, 85, 247, 0.55)' },
-    dragon: { principal: '#818CF8', fundo: '#312E81', borda: 'rgba(129, 140, 248, 0.55)' },
-    dragao: { principal: '#818CF8', fundo: '#312E81', borda: 'rgba(129, 140, 248, 0.55)' },
-    dark: { principal: '#A1A1AA', fundo: '#27272A', borda: 'rgba(161, 161, 170, 0.55)' },
-    sombrio: { principal: '#A1A1AA', fundo: '#27272A', borda: 'rgba(161, 161, 170, 0.55)' },
-    steel: { principal: '#CBD5E1', fundo: '#334155', borda: 'rgba(203, 213, 225, 0.55)' },
-    aco: { principal: '#CBD5E1', fundo: '#334155', borda: 'rgba(203, 213, 225, 0.55)' },
-    fairy: { principal: '#F9A8D4', fundo: '#701A75', borda: 'rgba(249, 168, 212, 0.55)' },
-    fada: { principal: '#F9A8D4', fundo: '#701A75', borda: 'rgba(249, 168, 212, 0.55)' },
-    default: { principal: cores.primaria, fundo: '#2A1815', borda: 'rgba(217, 80, 50, 0.5)' },
-};
-
-function normalizarChave(texto) {
-    return String(texto)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim();
-}
-
-function extrairTipos(item) {
-    // 1. Suporte ao relacionamento N:N do Supabase (pokemon_types -> types.name)
-    if (Array.isArray(item.pokemon_types) && item.pokemon_types.length > 0) {
-        const nomes = item.pokemon_types
-            .map((pt) => pt?.types?.name || pt?.name)
-            .filter(Boolean);
-        if (nomes.length > 0) return nomes;
-    }
-
-    // 2. Suporte a array direto (item.types = ['Grass', 'Poison'])
-    if (Array.isArray(item.types) && item.types.length > 0) {
-        return item.types.map((t) => (typeof t === 'string' ? t : t?.name)).filter(Boolean);
-    }
-
-    // 3. Suporte à coluna texto (item.type = 'Grass / Poison' ou 'Grass')
-    if (item.type) {
-        if (Array.isArray(item.type)) return item.type.filter(Boolean);
-        const separados = String(item.type)
-            .split(/[/,|•-]+/)
-            .map((t) => t.trim())
-            .filter(Boolean);
-        if (separados.length > 0) return separados;
-    }
-
-    return ['Normal'];
-}
-
-function obterEstiloTipo(nomeTipo) {
-    const chave = normalizarChave(nomeTipo);
-    return CORES_TIPO[chave] || CORES_TIPO.default;
-}
-
-function obterSpriteAnimado(id, shiny) {
+function obterUrlsSprite(id, shiny) {
     const pasta = shiny ? 'shiny/' : '';
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${pasta}${id}.gif`;
+    return {
+        gif: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${pasta}${id}.gif`,
+        artwork: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pasta}${id}.png`,
+    };
 }
 
-export default function PokemonCard({ item, onAbrirDetalhe }) {
+function formatarHabilidade(slug) {
+    return String(slug || '')
+        .split('-')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+}
+
+export default function PokemonCard({
+    item,
+    modoShiny = false,
+    bloqueadoBlur = false,
+    onAbrirDetalhe,
+}) {
+    const [usarFallbackArtwork, setUsarFallbackArtwork] = useState(false);
     const [expandido, setExpandido] = useState(false);
-    const [falhouGif, setFalhouGif] = useState(false);
+    const [habilidades, setHabilidades] = useState(() =>
+        cacheHabilidades.get(Number(item?.id)) || null
+    );
+    const [carregandoHabilidades, setCarregandoHabilidades] = useState(false);
+
+    const ehShiny = Boolean(modoShiny || item?.shiny);
 
     useEffect(() => {
-        setFalhouGif(false);
-    }, [item.id, item.shiny]);
+        setUsarFallbackArtwork(false);
+    }, [item?.id, ehShiny]);
 
-    const numeroFormatado = String(item.id).padStart(2, '0');
-    const listaTipos = extrairTipos(item);
+    useEffect(() => {
+        const idNum = Number(item?.id);
+        if (!expandido || !idNum) return;
 
-    const temaPrimario = obterEstiloTipo(listaTipos[0]);
-    const temaSecundario = listaTipos[1] ? obterEstiloTipo(listaTipos[1]) : temaPrimario;
+        if (cacheHabilidades.has(idNum)) {
+            setHabilidades(cacheHabilidades.get(idNum));
+            return;
+        }
 
-    // Gradiente de fundo: se tiver 2 tipos, mistura as 2 cores; se tiver 1, cria degrade profundo
-    const coresGradienteFundo = listaTipos[1]
-        ? [temaPrimario.fundo, temaSecundario.fundo]
-        : [temaPrimario.fundo, '#121216'];
+        let ativo = true;
+        const buscarHabilidades = async () => {
+            try {
+                setCarregandoHabilidades(true);
+                const resp = await fetch(`https://pokeapi.co/api/v2/pokemon/${idNum}`);
+                if (!resp.ok) return;
+                const dados = await resp.json();
 
-    const uriImagem =
-        !falhouGif && item.id
-            ? obterSpriteAnimado(item.id, item.shiny)
-            : item.image;
+                const lista = Array.isArray(dados?.abilities)
+                    ? dados.abilities.map((ab) => ({
+                        nome: formatarHabilidade(ab.ability?.name),
+                        oculta: Boolean(ab.is_hidden),
+                    }))
+                    : [];
 
-    const alternarExpansao = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpandido((prev) => !prev);
+                cacheHabilidades.set(idNum, lista);
+                if (ativo) setHabilidades(lista);
+            } catch {
+                if (ativo) setHabilidades([]);
+            } finally {
+                if (ativo) setCarregandoHabilidades(false);
+            }
+        };
+
+        buscarHabilidades();
+        return () => {
+            ativo = false;
+        };
+    }, [expandido, item?.id]);
+
+    const tipos =
+        Array.isArray(item?.types) && item.types.length > 0
+            ? item.types
+            : ['Normal'];
+
+    const tema1 = obterConfigTipo(tipos[0]);
+    const tema2 = tipos[1] ? obterConfigTipo(tipos[1]) : tema1;
+    const numeroFormatado = `#${String(item.id).padStart(2, '0')}`;
+    const sprites = obterUrlsSprite(item.id, ehShiny);
+
+    const handlePressCard = () => {
+        if (bloqueadoBlur) {
+            onAbrirDetalhe && onAbrirDetalhe(item);
+            return;
+        }
+
+        if (!expandido) {
+            setExpandido(true);
+            return;
+        }
+
+        onAbrirDetalhe && onAbrirDetalhe(item);
     };
 
     return (
-        <View style={[styles.cardWrapper, item.shiny && styles.cardShiny]}>
-            {!expandido ? (
-                /* MODO COMPACTO (Fiel ao wireframe 01-Pokedex) */
-                <TouchableOpacity
-                    style={styles.cardCompacto}
-                    activeOpacity={0.85}
-                    onPress={alternarExpansao}
-                >
-                    {/* Caixa Esquerda inteira colorida com o Tipo / Gradiente */}
-                    <LinearGradient
-                        colors={coresGradienteFundo}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.colunaImagem}
-                    >
-                        {uriImagem ? (
-                            <Image
-                                source={{ uri: uriImagem }}
-                                resizeMode="contain"
-                                style={styles.imagemCompacta}
-                                onError={() => setFalhouGif(true)}
-                            />
-                        ) : (
-                            <Text style={styles.semImagem}>?</Text>
-                        )}
-                    </LinearGradient>
-
-                    {/* Divisória Vertical */}
-                    <View style={styles.divisorVertical} />
-
-                    {/* Coluna Direita com Nome, Número e Pílulas de Tipo */}
-                    <View style={styles.colunaDados}>
-                        <View style={styles.linhaSuperior}>
-                            <Text style={styles.nome} numberOfLines={1}>
-                                {item.name}
-                            </Text>
-                            <Text style={styles.numero}>{numeroFormatado}</Text>
-                        </View>
-
-                        <View style={styles.linhaInferior}>
-                            <View style={styles.grupoPilulas}>
-                                {listaTipos.map((tipoNome, index) => {
-                                    const tema = obterEstiloTipo(tipoNome);
-                                    return (
-                                        <View
-                                            key={`${tipoNome}-${index}`}
-                                            style={[
-                                                styles.pilulaTipo,
-                                                {
-                                                    backgroundColor: `${tema.fundo}CC`,
-                                                    borderColor: tema.borda,
-                                                },
-                                            ]}
-                                        >
-                                            <View style={[styles.pontoTipo, { backgroundColor: tema.principal }]} />
-                                            <Text style={[styles.textoTipo, { color: tema.principal }]}>
-                                                {tipoNome}
-                                            </Text>
-                                        </View>
-                                    );
-                                })}
-                            </View>
-
-                            {item.shiny && (
-                                <View style={styles.badgeShiny}>
-                                    <Text style={styles.textoShiny}>✦</Text>
-                                </View>
-                            )}
-
-                            <View style={styles.botaoChevron}>
-                                <Text style={styles.chevron}>⌄</Text>
-                            </View>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-            ) : (
-                /* MODO EXPANDIDO (Fiel ao bloco intermediário do wireframe) */
-                <View style={styles.cardExpandido}>
-                    {/* Topo inteiro preenchido com a cor / gradiente do tipo do Pokémon */}
-                    <TouchableOpacity
-                        activeOpacity={0.92}
-                        onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
-                    >
-                        <LinearGradient
-                            colors={coresGradienteFundo}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.palcoExpandido}
-                        >
-                            {/* Reflexo suave no fundo para destacar o sprite animado */}
-                            <View style={styles.luzCentralPalco} />
-
-                            {uriImagem ? (
-                                <Image
-                                    source={{ uri: uriImagem }}
-                                    resizeMode="contain"
-                                    style={styles.imagemExpandida}
-                                    onError={() => setFalhouGif(true)}
-                                />
-                            ) : null}
-
-                            {item.shiny && (
-                                <View style={styles.tagShinyExpandida}>
-                                    <Text style={styles.textoShinyExpandida}>✦ SHINY</Text>
+        <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={handlePressCard}
+            style={[
+                styles.cardContainer,
+                ehShiny && !bloqueadoBlur && styles.cardShiny,
+            ]}
+        >
+            <LinearGradient
+                colors={
+                    bloqueadoBlur
+                        ? ['#15151A', '#111115']
+                        : [tema1.fundo, tema2.fundo, '#141418']
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.gradienteCard}
+            >
+                {expandido && !bloqueadoBlur ? (
+                    <View style={styles.cardExpandidoWrapper}>
+                        {/* Palco Superior com Sprite Grande */}
+                        <View style={styles.palcoGrande}>
+                            {ehShiny && (
+                                <View style={styles.pilulaShinyTopo}>
+                                    <Ionicons name="sparkles" size={11} color="#FACC15" />
+                                    <Text style={styles.textoShiny}>SHINY</Text>
                                 </View>
                             )}
 
                             <TouchableOpacity
+                                activeOpacity={0.75}
+                                onPress={(e) => {
+                                    e.stopPropagation?.();
+                                    setExpandido(false);
+                                }}
                                 style={styles.botaoRecolher}
-                                onPress={alternarExpansao}
                                 hitSlop={8}
                             >
-                                <Text style={styles.chevronRecolher}>⌃</Text>
+                                <Ionicons name="chevron-up" size={16} color={cores.texto} />
                             </TouchableOpacity>
-                        </LinearGradient>
-                    </TouchableOpacity>
 
-                    {/* Rodapé Escuro com Nome #01, Pílulas de Tipo e Habilidades */}
-                    <TouchableOpacity
-                        style={styles.rodapeExpandido}
-                        activeOpacity={0.85}
-                        onPress={() => onAbrirDetalhe && onAbrirDetalhe(item)}
-                    >
-                        <View style={styles.blocoEsquerdoExpandido}>
-                            <Text style={styles.nomeExpandido}>
-                                {item.name} <Text style={styles.numeroExpandido}>#{numeroFormatado}</Text>
-                            </Text>
+                            <Image
+                                source={{ uri: sprites.artwork || sprites.gif || item.image }}
+                                resizeMode="contain"
+                                style={styles.spriteGrande}
+                            />
+                        </View>
 
-                            <View style={[styles.grupoPilulas, { marginTop: 8 }]}>
-                                {listaTipos.map((tipoNome, index) => {
-                                    const tema = obterEstiloTipo(tipoNome);
+                        {/* Linha Divisória igual ao Excalidraw */}
+                        <View style={styles.divisorHorizontal} />
+
+                        {/* Rodapé em 3 colunas: Nome #01 | Tipos | Habilidades */}
+                        <View style={styles.rodapeExpandido}>
+                            <View style={styles.colunaNomeExpandido}>
+                                <Text style={styles.nomeExpandido} numberOfLines={2}>
+                                    {item.name}{' '}
+                                    <Text
+                                        style={[
+                                            styles.numeroExpandido,
+                                            ehShiny && { color: '#FACC15' },
+                                        ]}
+                                    >
+                                        {numeroFormatado}
+                                    </Text>
+                                </Text>
+                            </View>
+
+                            <View style={styles.colunaTiposExpandido}>
+                                {tipos.map((tipo) => {
+                                    const cfg = obterConfigTipo(tipo);
                                     return (
                                         <View
-                                            key={`${tipoNome}-exp-${index}`}
+                                            key={tipo}
                                             style={[
                                                 styles.pilulaTipo,
                                                 {
-                                                    backgroundColor: `${tema.fundo}CC`,
-                                                    borderColor: tema.borda,
+                                                    backgroundColor: `${cfg.fundo}E6`,
+                                                    borderColor: cfg.borda,
                                                 },
                                             ]}
                                         >
-                                            <View style={[styles.pontoTipo, { backgroundColor: tema.principal }]} />
-                                            <Text style={[styles.textoTipo, { color: tema.principal }]}>
-                                                {tipoNome}
+                                            <MaterialCommunityIcons
+                                                name={cfg.icone}
+                                                size={12}
+                                                color={cfg.cor}
+                                            />
+                                            <Text style={[styles.textoTipo, { color: cfg.cor }]}>
+                                                {cfg.label}
                                             </Text>
                                         </View>
                                     );
                                 })}
                             </View>
+
+                            <View style={styles.colunaHabilidades}>
+                                {carregandoHabilidades ? (
+                                    <ActivityIndicator size="small" color={tema1.cor} />
+                                ) : Array.isArray(habilidades) && habilidades.length > 0 ? (
+                                    habilidades.map((hab, idx) => (
+                                        <Text
+                                            key={`${hab.nome}-${idx}`}
+                                            style={[
+                                                styles.textoHabilidade,
+                                                hab.oculta && styles.textoHabilidadeOculta,
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {hab.oculta ? `H-${hab.nome}` : hab.nome}
+                                        </Text>
+                                    ))
+                                ) : (
+                                    <Text style={styles.textoHabilidade}>—</Text>
+                                )}
+                            </View>
+                        </View>
+                    </View>
+                ) : (
+                    /* Estado Recolhido (Padrão da Lista) */
+                    <View style={styles.linhaPrincipal}>
+                        <View
+                            style={[
+                                styles.palcoSprite,
+                                {
+                                    borderColor: bloqueadoBlur
+                                        ? 'rgba(255,255,255,0.08)'
+                                        : ehShiny
+                                            ? 'rgba(250, 204, 21, 0.45)'
+                                            : tema1.borda,
+                                },
+                            ]}
+                        >
+                            <Image
+                                source={{
+                                    uri: usarFallbackArtwork
+                                        ? sprites.artwork
+                                        : sprites.gif || item.image,
+                                }}
+                                resizeMode="contain"
+                                onError={() => {
+                                    if (!usarFallbackArtwork) {
+                                        setUsarFallbackArtwork(true);
+                                    }
+                                }}
+                                style={[
+                                    styles.sprite,
+                                    bloqueadoBlur && styles.spriteBloqueado,
+                                ]}
+                            />
                         </View>
 
-                        <View style={styles.blocoHabilidades}>
-                            <Text style={styles.labelHabilidade}>Habilidades</Text>
-                            <Text style={styles.valorHabilidade}>Ver ficha completa</Text>
-                            <Text style={styles.linkAbrirPagina}>Abrir página ›</Text>
+                        <View style={styles.infoColuna}>
+                            <View style={styles.topoInfo}>
+                                <Text
+                                    style={[
+                                        styles.nomePokemon,
+                                        bloqueadoBlur && styles.textoBloqueado,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {item.name}
+                                </Text>
+
+                                <Text
+                                    style={[
+                                        styles.numeroPokemon,
+                                        ehShiny && !bloqueadoBlur && { color: '#FACC15' },
+                                    ]}
+                                >
+                                    {numeroFormatado}
+                                </Text>
+                            </View>
+
+                            <View style={styles.rodapeInfo}>
+                                <View style={styles.listaTipos}>
+                                    {tipos.map((tipo) => {
+                                        const cfg = obterConfigTipo(tipo);
+                                        return (
+                                            <View
+                                                key={tipo}
+                                                style={[
+                                                    styles.pilulaTipo,
+                                                    {
+                                                        backgroundColor: `${cfg.fundo}E6`,
+                                                        borderColor: cfg.borda,
+                                                    },
+                                                ]}
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name={cfg.icone}
+                                                    size={12}
+                                                    color={cfg.cor}
+                                                />
+                                                <Text style={[styles.textoTipo, { color: cfg.cor }]}>
+                                                    {cfg.label}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+
+                                    {ehShiny && !bloqueadoBlur && (
+                                        <View style={styles.pilulaShiny}>
+                                            <Ionicons name="sparkles" size={10} color="#FACC15" />
+                                            <Text style={styles.textoShiny}>SHINY</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <TouchableOpacity
+                                    activeOpacity={0.75}
+                                    onPress={(e) => {
+                                        e.stopPropagation?.();
+                                        setExpandido(true);
+                                    }}
+                                    style={styles.botaoExpandir}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="chevron-down" size={14} color={cores.texto} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
+                    </View>
+                )}
+
+                {bloqueadoBlur && (
+                    <BlurView intensity={24} tint="dark" style={styles.overlayBlur}>
+                        <View style={styles.tagNaoCapturado}>
+                            <MaterialCommunityIcons
+                                name="pokeball"
+                                size={13}
+                                color={cores.textoSecundario}
+                            />
+                            <Text style={styles.textoNaoCapturado}>Não registrado na Dex</Text>
+                        </View>
+                    </BlurView>
+                )}
+            </LinearGradient>
+        </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    cardWrapper: {
-        backgroundColor: '#16161A',
-        borderRadius: bordas.raio + 6,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.12)',
-        marginBottom: espacos.pequeno + 6,
+    cardContainer: {
+        marginBottom: 10,
+        borderRadius: bordas.raio + 4,
         overflow: 'hidden',
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
-        elevation: 5,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     cardShiny: {
         borderColor: 'rgba(250, 204, 21, 0.55)',
     },
-    cardCompacto: {
-        flexDirection: 'row',
-        alignItems: 'stretch',
-        minHeight: 96,
+    gradienteCard: {
+        padding: 12,
+        position: 'relative',
     },
-    colunaImagem: {
-        width: 104,
+    /* --- Estilos Estado Recolhido --- */
+    linhaPrincipal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    palcoSprite: {
+        width: 72,
+        height: 72,
+        borderRadius: 14,
+        backgroundColor: 'rgba(0, 0, 0, 0.28)',
+        borderWidth: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 8,
+        padding: 4,
     },
-    imagemCompacta: {
-        width: 68,
-        height: 68,
+    sprite: {
+        width: 60,
+        height: 60,
     },
-    semImagem: {
-        color: cores.texto,
-        fontSize: fontes.titulo,
-        fontWeight: 'bold',
+    spriteBloqueado: {
+        opacity: 0.22,
+        tintColor: '#000000',
     },
-    divisorVertical: {
-        width: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    },
-    colunaDados: {
+    infoColuna: {
         flex: 1,
-        paddingHorizontal: espacos.medio,
-        paddingVertical: 12,
         justifyContent: 'space-between',
-        backgroundColor: '#16161A',
+        gap: 10,
     },
-    linhaSuperior: {
+    topoInfo: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
     },
-    nome: {
+    nomePokemon: {
         flex: 1,
         color: cores.texto,
+        fontSize: fontes.grande + 1,
+        fontWeight: '800',
+        textTransform: 'capitalize',
+    },
+    textoBloqueado: {
+        color: cores.textoSecundario,
+    },
+    numeroPokemon: {
+        color: cores.textoSecundario,
         fontSize: fontes.grande,
-        fontWeight: '700',
-        textTransform: 'capitalize',
-        letterSpacing: -0.3,
-    },
-    numero: {
-        color: cores.texto,
-        fontSize: fontes.grande + 2,
-        fontWeight: '900',
-        letterSpacing: 0.5,
-    },
-    linhaInferior: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: espacos.pequeno,
-    },
-    grupoPilulas: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    pilulaTipo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 11,
-        paddingVertical: 4,
-        borderRadius: 9,
-        borderWidth: 1,
-    },
-    pontoTipo: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    textoTipo: {
-        fontSize: fontes.pequena - 1,
-        fontWeight: '700',
-        textTransform: 'capitalize',
-    },
-    badgeShiny: {
-        marginLeft: 6,
-        paddingHorizontal: 7,
-        paddingVertical: 4,
-        borderRadius: 8,
-        backgroundColor: 'rgba(250, 204, 21, 0.16)',
-        borderWidth: 1,
-        borderColor: 'rgba(250, 204, 21, 0.45)',
-    },
-    textoShiny: {
-        color: '#FACC15',
-        fontSize: 11,
         fontWeight: '800',
     },
-    botaoChevron: {
-        marginLeft: 'auto',
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    rodapeInfo: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
+    },
+    listaTipos: {
+        flex: 1,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 6,
+    },
+    botaoExpandir: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'rgba(0, 0, 0, 0.35)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
         justifyContent: 'center',
+        alignItems: 'center',
     },
-    chevron: {
-        color: cores.texto,
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: -6,
+    /* --- Estilos Estado Expandido (Excalidraw) --- */
+    cardExpandidoWrapper: {
+        gap: 10,
     },
-    // Modo Expandido
-    cardExpandido: {
-        width: '100%',
-    },
-    palcoExpandido: {
+    palcoGrande: {
         height: 155,
         justifyContent: 'center',
         alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.14)',
         position: 'relative',
     },
-    luzCentralPalco: {
-        position: 'absolute',
-        width: 115,
-        height: 115,
-        borderRadius: 57.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    spriteGrande: {
+        width: 142,
+        height: 142,
     },
-    imagemExpandida: {
-        width: 96,
-        height: 96,
-    },
-    tagShinyExpandida: {
+    pilulaShinyTopo: {
         position: 'absolute',
-        top: 12,
-        left: 12,
-        paddingHorizontal: 9,
+        top: 0,
+        left: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 8,
-        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        borderRadius: 999,
+        backgroundColor: 'rgba(250, 204, 21, 0.14)',
         borderWidth: 1,
-        borderColor: 'rgba(250, 204, 21, 0.5)',
-    },
-    textoShinyExpandida: {
-        color: '#FACC15',
-        fontSize: 10,
-        fontWeight: '800',
-        letterSpacing: 0.8,
+        borderColor: 'rgba(250, 204, 21, 0.55)',
     },
     botaoRecolher: {
         position: 'absolute',
-        top: 10,
-        right: 12,
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: 'rgba(0, 0, 0, 0.35)',
+        top: 0,
+        right: 0,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.18)',
-        alignItems: 'center',
+        borderColor: 'rgba(255, 255, 255, 0.14)',
         justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2,
     },
-    chevronRecolher: {
-        color: cores.texto,
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: 4,
+    divisorHorizontal: {
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.14)',
+        marginHorizontal: -4,
     },
     rodapeExpandido: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: espacos.medio,
-        backgroundColor: '#16161A',
+        gap: 8,
+        paddingTop: 2,
     },
-    blocoEsquerdoExpandido: {
-        flex: 1,
+    colunaNomeExpandido: {
+        flex: 1.15,
     },
     nomeExpandido: {
         color: cores.texto,
-        fontSize: fontes.grande + 1,
-        fontWeight: '700',
+        fontSize: fontes.normal + 1,
+        fontWeight: '800',
         textTransform: 'capitalize',
     },
     numeroExpandido: {
         color: cores.textoSecundario,
-        fontWeight: '800',
+        fontWeight: '700',
     },
-    blocoHabilidades: {
+    colunaTiposExpandido: {
+        flex: 1.1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+    },
+    colunaHabilidades: {
+        flex: 1.15,
         alignItems: 'flex-end',
-        paddingLeft: 12,
-        borderLeftWidth: 1,
-        borderLeftColor: 'rgba(255, 255, 255, 0.1)',
+        justifyContent: 'center',
+        gap: 3,
     },
-    labelHabilidade: {
-        color: cores.textoSecundario,
+    textoHabilidade: {
+        color: cores.texto,
         fontSize: 11,
         fontWeight: '600',
+        textAlign: 'right',
     },
-    valorHabilidade: {
-        color: cores.texto,
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    linkAbrirPagina: {
-        color: cores.primaria,
-        fontSize: 12,
+    textoHabilidadeOculta: {
+        color: '#FACC15',
         fontWeight: '700',
-        marginTop: 4,
+    },
+    /* --- Pílulas Compartilhadas --- */
+    pilulaTipo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    textoTipo: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'capitalize',
+    },
+    pilulaShiny: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: 'rgba(250, 204, 21, 0.14)',
+        borderWidth: 1,
+        borderColor: 'rgba(250, 204, 21, 0.55)',
+    },
+    textoShiny: {
+        color: '#FACC15',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.4,
+    },
+    overlayBlur: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    tagNaoCapturado: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: 'rgba(15, 15, 20, 0.78)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    textoNaoCapturado: {
+        color: cores.textoSecundario,
+        fontSize: 11,
+        fontWeight: '700',
     },
 });

@@ -7,8 +7,10 @@ const USER_POKEMON_SELECT = `
   id_user,
   id_pokemon,
   catch,
+  catch_shiny,
   favority,
-  pokemons!pokemon_user_id_pokemon_fkey (
+  favority_shiny,
+  pokemons (
     id,
     name,
     image,
@@ -30,10 +32,10 @@ function formatUserPokemons(rows) {
 
     const types = Array.isArray(row.pokemons.pokemon_types)
       ? row.pokemons.pokemon_types
-          .slice()
-          .sort((a, b) => a.slot - b.slot)
-          .map((pt) => pt.types?.name)
-          .filter(Boolean)
+        .slice()
+        .sort((a, b) => a.slot - b.slot)
+        .map((pt) => pt.types?.name)
+        .filter(Boolean)
       : [];
 
     const { pokemon_types, ...restPokemon } = row.pokemons;
@@ -76,16 +78,28 @@ router.get('/users/me/favorites', authMiddleware, async (req, res) => {
     .from('pokemon_user')
     .select(USER_POKEMON_SELECT)
     .eq('id_user', id_user)
-    .eq('favority', true)
+    .or('favority.eq.true,favority_shiny.eq.true')
     .order('id', { ascending: true });
 
   if (error) {
-    return res.status(400).json({ erro: error.message, error: error.message });
+    return res.status(400).json({ erro: error.message });
   }
 
-  return res.status(200).json(formatUserPokemons(data));
-});
+  const formatados = formatUserPokemons(data);
+  const resultado = formatados.flatMap((row) => {
+    if (!row.pokemons) return [];
+    const lista = [];
+    if (row.favority) {
+      lista.push({ ...row, pokemons: { ...row.pokemons, shiny: false } });
+    }
+    if (row.favority_shiny) {
+      lista.push({ ...row, pokemons: { ...row.pokemons, shiny: true } });
+    }
+    return lista;
+  });
 
+  return res.status(200).json(resultado);
+});
 router.get('/users/me/captured', authMiddleware, async (req, res) => {
   const id_user = req.usuario.id;
 
@@ -93,14 +107,28 @@ router.get('/users/me/captured', authMiddleware, async (req, res) => {
     .from('pokemon_user')
     .select(USER_POKEMON_SELECT)
     .eq('id_user', id_user)
-    .eq('catch', true)
+    .or('catch.eq.true,catch_shiny.eq.true')
     .order('id', { ascending: true });
 
   if (error) {
-    return res.status(400).json({ erro: error.message, error: error.message });
+    return res.status(400).json({ erro: error.message });
   }
 
-  return res.status(200).json(formatUserPokemons(data));
+  const formatado = data.flatMap((row) => {
+    if (!row.pokemons) return [];
+    const base = formatUserPokemons([row])[0].pokemons;
+    const entradas = [];
+
+    if (row.catch) {
+      entradas.push({ ...row, pokemons: { ...base, shiny: false } });
+    }
+    if (row.catch_shiny) {
+      entradas.push({ ...row, pokemons: { ...base, shiny: true } });
+    }
+    return entradas;
+  });
+
+  return res.status(200).json(formatado);
 });
 
 module.exports = router;

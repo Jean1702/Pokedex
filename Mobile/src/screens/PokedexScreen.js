@@ -10,12 +10,16 @@ import {
     Modal,
     Pressable,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import AvatarUser from '../components/AvatarUser';
 import PokemonCard from '../components/PokemonCard';
+import { TIPOS_OFICIAIS } from '../constants/tiposPokemon';
 import { AuthContext } from '../contexts/AuthContext';
-import { listarPokemons } from '../services/pokemon.service';
+import {
+    listarCapturadosUsuario,
+    listarPokemons,
+} from '../services/pokemon.service';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
 
 const GERACOES = [
@@ -31,28 +35,6 @@ const GERACOES = [
     { id: 'gen9', label: 'Gen IX', regiao: 'Paldea', faixa: '906–1025', min: 906, max: 1025, cor: '#A855F7' },
 ];
 
-const TIPOS_OFICIAIS = [
-    { nome: 'Todos', label: 'All Types', cor: cores.primaria },
-    { nome: 'Normal', label: 'Normal', cor: '#A8A77A' },
-    { nome: 'Fire', label: 'Fire', cor: '#F97316' },
-    { nome: 'Water', label: 'Water', cor: '#38BDF8' },
-    { nome: 'Grass', label: 'Grass', cor: '#22C55E' },
-    { nome: 'Electric', label: 'Electric', cor: '#FACC15' },
-    { nome: 'Ice', label: 'Ice', cor: '#67E8F9' },
-    { nome: 'Fighting', label: 'Fighting', cor: '#EF4444' },
-    { nome: 'Poison', label: 'Poison', cor: '#C084FC' },
-    { nome: 'Ground', label: 'Ground', cor: '#D97706' },
-    { nome: 'Flying', label: 'Flying', cor: '#818CF8' },
-    { nome: 'Psychic', label: 'Psychic', cor: '#EC4899' },
-    { nome: 'Bug', label: 'Bug', cor: '#84CC16' },
-    { nome: 'Rock', label: 'Rock', cor: '#B45309' },
-    { nome: 'Ghost', label: 'Ghost', cor: '#A855F7' },
-    { nome: 'Dragon', label: 'Dragon', cor: '#6366F1' },
-    { nome: 'Dark', label: 'Dark', cor: '#71717A' },
-    { nome: 'Steel', label: 'Steel', cor: '#94A3B8' },
-    { nome: 'Fairy', label: 'Fairy', cor: '#F472B6' },
-];
-
 const SUFIXOS_EXTRAS = [
     '-mega', '-gmax', '-alola', '-galar', '-hisui', '-paldea',
     '-totem', '-primal', '-origin', '-eternamax', '-blade', '-crowned',
@@ -66,7 +48,7 @@ function ehPokemonBase(pokemon) {
 }
 
 export default function PokedexScreen({ navigation }) {
-    const { token } = useContext(AuthContext);
+    const { token, sair } = useContext(AuthContext);
 
     const [pokemons, setPokemons] = useState([]);
     const [carregando, setCarregando] = useState(true);
@@ -74,17 +56,24 @@ export default function PokedexScreen({ navigation }) {
     const [erro, setErro] = useState('');
 
     const [geracaoSelecionada, setGeracaoSelecionada] = useState(GERACOES[0]);
-    const [tipoSelecionado, setTipoSelecionado] = useState(TIPOS_OFICIAIS[0]);
-    const [apenasShiny, setApenasShiny] = useState(false);
+    const [tiposSelecionados, setTiposSelecionados] = useState([]);
+    const [modoShiny, setModoShiny] = useState(false);
+    const [modoCapturados, setModoCapturados] = useState(false);
+    const [mapaCapturados, setMapaCapturados] = useState(() => new Map());
     const [busca, setBusca] = useState('');
     const [modalFiltro, setModalFiltro] = useState(null);
 
-    const carregarDados = useCallback(async (tipoNome = 'Todos', silencioso = false) => {
+    const nomesTiposAtivos = useMemo(
+        () => tiposSelecionados.map((t) => t.nome),
+        [tiposSelecionados]
+    );
+
+    const carregarDados = useCallback(async (listaTipos = [], silencioso = false) => {
         try {
             if (!silencioso) setCarregando(true);
             setErro('');
 
-            const dados = await listarPokemons(tipoNome);
+            const dados = await listarPokemons(listaTipos);
             const listaLimpa = Array.isArray(dados) ? dados.filter(ehPokemonBase) : [];
             setPokemons(listaLimpa);
         } catch (e) {
@@ -95,9 +84,84 @@ export default function PokedexScreen({ navigation }) {
         }
     }, []);
 
+    const carregarCapturados = useCallback(async () => {
+        if (!token) {
+            setMapaCapturados(new Map());
+            return;
+        }
+
+        try {
+            const dados = await listarCapturadosUsuario(token);
+            if (Array.isArray(dados)) {
+                const novoMapa = new Map();
+                dados.forEach((row) => {
+                    const poke = row?.pokemons || row;
+                    const idNum = Number(poke?.id || row?.id_pokemon);
+                    if (Number.isNaN(idNum)) return;
+
+                    const atual = novoMapa.get(idNum) || { normal: false, shiny: false };
+                    const ehShinyRow =
+                        typeof poke?.shiny === 'boolean' ? poke.shiny : Boolean(row?.catch_shiny);
+
+                    if (ehShinyRow) {
+                        atual.shiny = true;
+                    } else {
+                        atual.normal = true;
+                    }
+                    novoMapa.set(idNum, atual);
+                });
+                setMapaCapturados(novoMapa);
+            }
+        } catch (e) {
+            if (e?.status === 401) {
+                await sair();
+                setModoCapturados(false);
+            }
+        }
+    }, [token, sair]);
+
     useEffect(() => {
-        carregarDados(tipoSelecionado.nome);
-    }, [tipoSelecionado, carregarDados]);
+        carregarDados(nomesTiposAtivos);
+    }, [nomesTiposAtivos, carregarDados]);
+
+    useEffect(() => {
+        if (!token) {
+            setModoCapturados(false);
+            setMapaCapturados(new Map());
+            return;
+        }
+        carregarCapturados();
+    }, [token, carregarCapturados]);
+
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            if (token) {
+                carregarCapturados();
+            }
+        });
+        return unsubscribe;
+    }, [navigation, token, carregarCapturados]);
+
+    const alternarModoCapturados = () => {
+        if (!token) {
+            navigation.navigate('LoginScreen');
+            return;
+        }
+        setModoCapturados((prev) => !prev);
+    };
+
+    const alternarTipo = (tipoObj) => {
+        setTiposSelecionados((prev) => {
+            const jaExiste = prev.some((t) => t.nome === tipoObj.nome);
+            if (jaExiste) {
+                return prev.filter((t) => t.nome !== tipoObj.nome);
+            }
+            if (prev.length >= 2) {
+                return [prev[1], tipoObj];
+            }
+            return [...prev, tipoObj];
+        });
+    };
 
     const pokemonsFiltrados = useMemo(() => {
         return pokemons.filter((p) => {
@@ -105,38 +169,52 @@ export default function PokedexScreen({ navigation }) {
             const bateGeracao =
                 idNum >= geracaoSelecionada.min && idNum <= geracaoSelecionada.max;
 
-            const bateShiny = !apenasShiny || Boolean(p.shiny);
-
             const termo = busca.trim().toLowerCase();
             const bateBusca =
                 !termo ||
                 p.name?.toLowerCase().includes(termo) ||
                 String(p.id).includes(termo);
 
-            return bateGeracao && bateShiny && bateBusca;
+            return bateGeracao && bateBusca;
         });
-    }, [pokemons, geracaoSelecionada, apenasShiny, busca]);
+    }, [pokemons, geracaoSelecionada, busca]);
+
+    const totalCapturadosNaLista = useMemo(() => {
+        if (!modoCapturados) return 0;
+        return pokemonsFiltrados.filter((p) => {
+            const cap = mapaCapturados.get(Number(p.id));
+            return modoShiny ? Boolean(cap?.shiny) : Boolean(cap?.normal);
+        }).length;
+    }, [modoCapturados, modoShiny, pokemonsFiltrados, mapaCapturados]);
 
     const temFiltroAtivo =
         geracaoSelecionada.id !== 'todas' ||
-        tipoSelecionado.nome !== 'Todos' ||
-        apenasShiny ||
+        tiposSelecionados.length > 0 ||
+        modoShiny ||
+        modoCapturados ||
         busca.trim().length > 0;
 
     const limparFiltros = () => {
         setGeracaoSelecionada(GERACOES[0]);
-        setTipoSelecionado(TIPOS_OFICIAIS[0]);
-        setApenasShiny(false);
+        setTiposSelecionados([]);
+        setModoShiny(false);
+        setModoCapturados(false);
         setBusca('');
     };
 
+    const corPrimariaTipo = tiposSelecionados[0]?.cor || cores.textoSecundario;
+    const textoChipTipo =
+        tiposSelecionados.length === 0
+            ? 'Tipo'
+            : tiposSelecionados.map((t) => t.label).join(' + ');
+
     return (
         <View style={styles.container}>
-            {/* CABEÇALHO FLUIDO E FUNCIONAL */}
             <View style={styles.headerContainer}>
                 <View style={styles.linhaBusca}>
                     <AvatarUser
                         tamanho={44}
+                        mostrarStatus
                         onPress={() => navigation.navigate(token ? 'UserScreen' : 'LoginScreen')}
                     />
 
@@ -159,7 +237,6 @@ export default function PokedexScreen({ navigation }) {
                     </View>
                 </View>
 
-                {/* Linha 2: Chips de Filtro Rápido (Geração, Tipo e Shiny) */}
                 <View style={styles.linhaFiltros}>
                     <TouchableOpacity
                         activeOpacity={0.75}
@@ -188,51 +265,72 @@ export default function PokedexScreen({ navigation }) {
                         onPress={() => setModalFiltro('tipo')}
                         style={[
                             styles.chipFiltro,
-                            tipoSelecionado.nome !== 'Todos' && {
-                                borderColor: tipoSelecionado.cor,
-                                backgroundColor: `${tipoSelecionado.cor}1F`,
+                            tiposSelecionados.length > 0 && {
+                                borderColor: corPrimariaTipo,
+                                backgroundColor: `${corPrimariaTipo}1F`,
                             },
                         ]}
                     >
-                        <View
-                            style={[
-                                styles.pontoCor,
-                                {
-                                    backgroundColor:
-                                        tipoSelecionado.nome !== 'Todos' ? tipoSelecionado.cor : cores.textoSecundario,
-                                },
-                            ]}
-                        />
+                        <View style={styles.grupoIconesChip}>
+                            {tiposSelecionados.length === 0 ? (
+                                <MaterialCommunityIcons
+                                    name="shape-outline"
+                                    size={14}
+                                    color={cores.textoSecundario}
+                                />
+                            ) : (
+                                tiposSelecionados.map((t) => (
+                                    <MaterialCommunityIcons
+                                        key={t.nome}
+                                        name={t.icone}
+                                        size={13}
+                                        color={t.cor}
+                                    />
+                                ))
+                            )}
+                        </View>
                         <Text style={styles.textoChipFiltro} numberOfLines={1}>
-                            {tipoSelecionado.nome === 'Todos' ? 'Tipo' : tipoSelecionado.label}
+                            {textoChipTipo}
                         </Text>
                         <Ionicons name="chevron-down" size={13} color={cores.textoSecundario} />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         activeOpacity={0.75}
-                        onPress={() => setApenasShiny((prev) => !prev)}
-                        style={[
-                            styles.chipShiny,
-                            apenasShiny && styles.chipShinyAtivo,
-                        ]}
+                        onPress={() => setModoShiny((prev) => !prev)}
+                        style={[styles.chipAcao, modoShiny && styles.chipShinyAtivo]}
                     >
                         <Ionicons
-                            name={apenasShiny ? 'sparkles' : 'sparkles-outline'}
+                            name={modoShiny ? 'sparkles' : 'sparkles-outline'}
                             size={14}
-                            color={apenasShiny ? '#FACC15' : cores.textoSecundario}
+                            color={modoShiny ? '#FACC15' : cores.textoSecundario}
                         />
-                        <Text style={[styles.textoChipFiltro, apenasShiny && { color: '#FACC15' }]}>
+                        <Text style={[styles.textoChipFiltro, modoShiny && { color: '#FACC15' }]}>
                             Shiny
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={alternarModoCapturados}
+                        style={[styles.chipAcao, modoCapturados && styles.chipCapturadosAtivo]}
+                    >
+                        <MaterialCommunityIcons
+                            name="pokeball"
+                            size={15}
+                            color={modoCapturados ? '#38BDF8' : cores.textoSecundario}
+                        />
+                        <Text style={[styles.textoChipFiltro, modoCapturados && { color: '#38BDF8' }]}>
+                            Dex
                         </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Linha 3: Barra de Status Discreta (Total + Limpar) */}
                 <View style={styles.barraStatus}>
                     <Text style={styles.textoContador}>
-                        {pokemonsFiltrados.length}{' '}
-                        {pokemonsFiltrados.length === 1 ? 'Pokémon exibido' : 'Pokémons exibidos'}
+                        {modoCapturados
+                            ? `${totalCapturadosNaLista} ${modoShiny ? 'shinies capturados' : 'capturados'} de ${pokemonsFiltrados.length} exibidos`
+                            : `${pokemonsFiltrados.length} ${pokemonsFiltrados.length === 1 ? 'Pokémon exibido' : 'Pokémons exibidos'}`}
                     </Text>
 
                     {temFiltroAtivo && (
@@ -243,7 +341,6 @@ export default function PokedexScreen({ navigation }) {
                 </View>
             </View>
 
-            {/* CONTEÚDO PRINCIPAL */}
             {carregando ? (
                 <View style={styles.centralizado}>
                     <ActivityIndicator size="large" color={cores.primaria} />
@@ -254,7 +351,7 @@ export default function PokedexScreen({ navigation }) {
                     <Text style={styles.textoErro}>{erro}</Text>
                     <TouchableOpacity
                         style={styles.botaoTentarNovamente}
-                        onPress={() => carregarDados(tipoSelecionado.nome)}
+                        onPress={() => carregarDados(nomesTiposAtivos)}
                     >
                         <Text style={styles.textoBotao}>Tentar novamente</Text>
                     </TouchableOpacity>
@@ -263,20 +360,36 @@ export default function PokedexScreen({ navigation }) {
                 <FlatList
                     data={pokemonsFiltrados}
                     keyExtractor={(item) => String(item.id)}
-                    renderItem={({ item }) => (
-                        <PokemonCard
-                            item={item}
-                            onAbrirDetalhe={(pokemonSelecionado) => {
-                                navigation.navigate('PokemonScreen', { id: pokemonSelecionado.id });
-                            }}
-                        />
-                    )}
+                    renderItem={({ item }) => {
+                        const captura = mapaCapturados.get(Number(item.id));
+                        const exibirShinyCard = modoShiny || Boolean(item.shiny);
+                        const capturadoNaVariante = modoShiny
+                            ? Boolean(captura?.shiny)
+                            : Boolean(captura?.normal);
+
+                        return (
+                            <PokemonCard
+                                item={item}
+                                modoShiny={exibirShinyCard}
+                                bloqueadoBlur={modoCapturados && !capturadoNaVariante}
+                                onAbrirDetalhe={(pokemonSelecionado) => {
+                                    navigation.navigate('PokemonScreen', {
+                                        id: pokemonSelecionado.id,
+                                        shiny: exibirShinyCard,
+                                    });
+                                }}
+                            />
+                        );
+                    }}
                     contentContainerStyle={styles.lista}
                     showsVerticalScrollIndicator={false}
                     refreshing={atualizando}
                     onRefresh={() => {
                         setAtualizando(true);
-                        carregarDados(tipoSelecionado.nome, true);
+                        carregarDados(nomesTiposAtivos, true);
+                        if (token) {
+                            carregarCapturados();
+                        }
                     }}
                     ListEmptyComponent={
                         <View style={styles.vazioContainer}>
@@ -287,7 +400,6 @@ export default function PokedexScreen({ navigation }) {
                 />
             )}
 
-            {/* MODAL POPOVER COMPACTO E SEM ROLAGEM PESADA */}
             <Modal
                 visible={modalFiltro !== null}
                 transparent
@@ -299,9 +411,19 @@ export default function PokedexScreen({ navigation }) {
 
                     <Pressable style={styles.popoverCard} onPress={(e) => e.stopPropagation()}>
                         <View style={styles.popoverHeader}>
-                            <Text style={styles.popoverTitulo}>
-                                {modalFiltro === 'geracao' ? 'Filtrar por Geração' : 'Filtrar por Elemento'}
-                            </Text>
+                            <View style={styles.popoverTituloGrupo}>
+                                <Text style={styles.popoverTitulo}>
+                                    {modalFiltro === 'geracao' ? 'Filtrar por Geração' : 'Filtrar por Elemento'}
+                                </Text>
+                                {modalFiltro === 'tipo' && (
+                                    <View style={styles.badgeLimiteTipos}>
+                                        <Text style={styles.textoLimiteTipos}>
+                                            {tiposSelecionados.length}/2
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+
                             <TouchableOpacity
                                 onPress={() => setModalFiltro(null)}
                                 style={styles.botaoFechar}
@@ -344,38 +466,101 @@ export default function PokedexScreen({ navigation }) {
                                 })}
                             </View>
                         ) : (
-                            <View style={styles.gridTipos}>
-                                {TIPOS_OFICIAIS.map((tipo) => {
-                                    const ativo = tipoSelecionado.nome === tipo.nome;
-                                    return (
-                                        <TouchableOpacity
-                                            key={tipo.nome}
-                                            activeOpacity={0.75}
-                                            onPress={() => {
-                                                setTipoSelecionado(tipo);
-                                                setModalFiltro(null);
-                                            }}
+                            <View>
+                                <View style={styles.gridTipos}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.75}
+                                        onPress={() => {
+                                            setTiposSelecionados([]);
+                                            setModalFiltro(null);
+                                        }}
+                                        style={[
+                                            styles.itemTipo,
+                                            tiposSelecionados.length === 0 && {
+                                                borderColor: cores.primaria,
+                                                backgroundColor: `${cores.primaria}24`,
+                                            },
+                                        ]}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name="shape-outline"
+                                            size={14}
+                                            color={cores.primaria}
+                                        />
+                                        <Text
                                             style={[
-                                                styles.itemTipo,
-                                                ativo && {
-                                                    borderColor: tipo.cor,
-                                                    backgroundColor: `${tipo.cor}24`,
+                                                styles.itemTipoTexto,
+                                                tiposSelecionados.length === 0 && {
+                                                    color: cores.texto,
+                                                    fontWeight: '700',
                                                 },
                                             ]}
+                                            numberOfLines={1}
                                         >
-                                            <View style={[styles.pontoCor, { backgroundColor: tipo.cor }]} />
-                                            <Text
+                                            Todos
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    {TIPOS_OFICIAIS.map((tipo) => {
+                                        const indexSelecionado = tiposSelecionados.findIndex(
+                                            (t) => t.nome === tipo.nome
+                                        );
+                                        const ativo = indexSelecionado !== -1;
+
+                                        return (
+                                            <TouchableOpacity
+                                                key={tipo.nome}
+                                                activeOpacity={0.75}
+                                                onPress={() => alternarTipo(tipo)}
                                                 style={[
-                                                    styles.itemTipoTexto,
-                                                    ativo && { color: cores.texto, fontWeight: '700' },
+                                                    styles.itemTipo,
+                                                    ativo && {
+                                                        borderColor: tipo.cor,
+                                                        backgroundColor: `${tipo.cor}28`,
+                                                    },
                                                 ]}
-                                                numberOfLines={1}
                                             >
-                                                {tipo.label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                                <MaterialCommunityIcons
+                                                    name={tipo.icone}
+                                                    size={15}
+                                                    color={ativo ? tipo.cor : `${tipo.cor}CC`}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        styles.itemTipoTexto,
+                                                        ativo && { color: cores.texto, fontWeight: '700' },
+                                                    ]}
+                                                    numberOfLines={1}
+                                                >
+                                                    {tipo.label}
+                                                </Text>
+                                                {ativo && (
+                                                    <Text style={[styles.ordemSlotTexto, { color: tipo.cor }]}>
+                                                        {indexSelecionado + 1}
+                                                    </Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                <View style={styles.rodapeModalTipos}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        onPress={() => setTiposSelecionados([])}
+                                        style={styles.botaoLimparModal}
+                                    >
+                                        <Text style={styles.textoLimparModal}>Limpar</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        activeOpacity={0.85}
+                                        onPress={() => setModalFiltro(null)}
+                                        style={styles.botaoAplicarModal}
+                                    >
+                                        <Text style={styles.textoAplicarModal}>Aplicar</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         )}
                     </Pressable>
@@ -428,28 +613,28 @@ const styles = StyleSheet.create({
     linhaFiltros: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
     },
     chipFiltro: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 5,
         height: 36,
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         borderRadius: 11,
         backgroundColor: cores.superficie,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.09)',
     },
-    chipShiny: {
+    chipAcao: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 5,
+        gap: 4,
         height: 36,
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         borderRadius: 11,
         backgroundColor: cores.superficie,
         borderWidth: 1,
@@ -459,15 +644,20 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(250, 204, 21, 0.55)',
         backgroundColor: 'rgba(250, 204, 21, 0.14)',
     },
+    chipCapturadosAtivo: {
+        borderColor: 'rgba(56, 189, 248, 0.55)',
+        backgroundColor: 'rgba(56, 189, 248, 0.14)',
+    },
     textoChipFiltro: {
         color: cores.texto,
-        fontSize: fontes.pequena,
+        fontSize: 12,
         fontWeight: '600',
+        flexShrink: 1,
     },
-    pontoCor: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+    grupoIconesChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
     },
     barraStatus: {
         flexDirection: 'row',
@@ -520,7 +710,6 @@ const styles = StyleSheet.create({
         fontSize: fontes.normal,
         fontWeight: '600',
     },
-    // Modal Popover Flutuante
     modalBackdrop: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.65)',
@@ -548,10 +737,26 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 14,
     },
+    popoverTituloGrupo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     popoverTitulo: {
         color: cores.texto,
         fontSize: fontes.grande,
         fontWeight: '700',
+    },
+    badgeLimiteTipos: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    },
+    textoLimiteTipos: {
+        color: cores.primaria,
+        fontSize: 12,
+        fontWeight: '800',
     },
     botaoFechar: {
         width: 30,
@@ -600,11 +805,11 @@ const styles = StyleSheet.create({
         width: '31.5%',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 7,
+        gap: 6,
         backgroundColor: '#111115',
         borderRadius: 10,
         paddingVertical: 9,
-        paddingHorizontal: 10,
+        paddingHorizontal: 9,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.07)',
     },
@@ -613,5 +818,41 @@ const styles = StyleSheet.create({
         fontSize: fontes.pequena,
         fontWeight: '600',
         flex: 1,
+    },
+    ordemSlotTexto: {
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    rodapeModalTipos: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 10,
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    botaoLimparModal: {
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    },
+    textoLimparModal: {
+        color: cores.textoSecundario,
+        fontSize: fontes.pequena,
+        fontWeight: '700',
+    },
+    botaoAplicarModal: {
+        paddingHorizontal: 18,
+        paddingVertical: 9,
+        borderRadius: 10,
+        backgroundColor: cores.primaria,
+    },
+    textoAplicarModal: {
+        color: cores.texto,
+        fontSize: fontes.pequena,
+        fontWeight: '700',
     },
 });

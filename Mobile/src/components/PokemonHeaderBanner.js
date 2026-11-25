@@ -1,304 +1,358 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     StyleSheet,
     Text,
     View,
     Image,
     TouchableOpacity,
+    Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { obterConfigTipo } from '../constants/tiposPokemon';
 import { cores, fontes, espacos } from '../styles/theme';
 
-const CORES_TIPO = {
-    normal: { principal: '#A8A77A', fundo: '#4A4936', borda: 'rgba(168, 167, 122, 0.55)' },
-    fire: { principal: '#FB923C', fundo: '#7C2D12', borda: 'rgba(251, 146, 60, 0.55)' },
-    water: { principal: '#38BDF8', fundo: '#0C4A6E', borda: 'rgba(56, 189, 248, 0.55)' },
-    grass: { principal: '#4ADE80', fundo: '#14532D', borda: 'rgba(74, 222, 128, 0.55)' },
-    electric: { principal: '#FACC15', fundo: '#713F12', borda: 'rgba(250, 204, 21, 0.55)' },
-    ice: { principal: '#67E8F9', fundo: '#164E63', borda: 'rgba(103, 232, 249, 0.55)' },
-    fighting: { principal: '#F87171', fundo: '#7F1D1D', borda: 'rgba(248, 113, 113, 0.55)' },
-    poison: { principal: '#C084FC', fundo: '#581C87', borda: 'rgba(192, 132, 252, 0.55)' },
-    ground: { principal: '#FBBF24', fundo: '#78350F', borda: 'rgba(251, 191, 36, 0.55)' },
-    flying: { principal: '#93C5FD', fundo: '#1E3A8A', borda: 'rgba(147, 197, 253, 0.55)' },
-    psychic: { principal: '#F472B6', fundo: '#831843', borda: 'rgba(244, 114, 182, 0.55)' },
-    bug: { principal: '#A3E635', fundo: '#365314', borda: 'rgba(163, 230, 53, 0.55)' },
-    rock: { principal: '#D6D3D1', fundo: '#44403C', borda: 'rgba(214, 211, 209, 0.55)' },
-    ghost: { principal: '#A855F7', fundo: '#3B0764', borda: 'rgba(168, 85, 247, 0.55)' },
-    dragon: { principal: '#818CF8', fundo: '#312E81', borda: 'rgba(129, 140, 248, 0.55)' },
-    dark: { principal: '#A1A1AA', fundo: '#27272A', borda: 'rgba(161, 161, 170, 0.55)' },
-    steel: { principal: '#CBD5E1', fundo: '#334155', borda: 'rgba(203, 213, 225, 0.55)' },
-    fairy: { principal: '#F9A8D4', fundo: '#701A75', borda: 'rgba(249, 168, 212, 0.55)' },
-    default: { principal: cores.primaria, fundo: '#2A1815', borda: 'rgba(217, 80, 50, 0.5)' },
-};
-
-export function obterEstiloTipo(tipo) {
-    const chave = String(tipo || '').toLowerCase().trim();
-    return CORES_TIPO[chave] || CORES_TIPO.default;
+export function obterEstiloTipo(nomeTipo) {
+    const cfg = obterConfigTipo(nomeTipo);
+    return {
+        principal: cfg.cor,
+        fundo: cfg.fundo,
+        borda: cfg.borda,
+        icone: cfg.icone,
+        label: cfg.label,
+    };
 }
 
 export default function PokemonHeaderBanner({
     pokemon,
-    capturado,
+    shiny = false,
+    onAlternarShiny,
+    capturado = false,
     onVoltar,
     onCapturar,
-    alturaPalco = 140,
+    alturaPalco = 145,
 }) {
-    const [modoSprite, setModoSprite] = useState(0);
-    const [falhouSprite, setFalhouSprite] = useState(false);
+    const [indiceSprite, setIndiceSprite] = useState(0);
+    const [erroSprite, setErroSprite] = useState(false);
+
+    const animSprite = useRef(new Animated.Value(1)).current;
+    const largurasIndicadores = useRef([
+        new Animated.Value(18),
+        new Animated.Value(6),
+        new Animated.Value(6),
+    ]).current;
 
     useEffect(() => {
-        setModoSprite(0);
-        setFalhouSprite(false);
-    }, [pokemon?.id]);
+        setErroSprite(false);
+    }, [pokemon?.id, shiny, indiceSprite]);
 
-    if (!pokemon) return null;
+    useEffect(() => {
+        largurasIndicadores.forEach((anim, idx) => {
+            Animated.spring(anim, {
+                toValue: idx === indiceSprite ? 18 : 6,
+                friction: 7,
+                tension: 90,
+                useNativeDriver: false,
+            }).start();
+        });
 
-    const tipos = Array.isArray(pokemon.types) && pokemon.types.length > 0
-        ? pokemon.types
-        : ['normal'];
+        animSprite.setValue(0.86);
+        Animated.spring(animSprite, {
+            toValue: 1,
+            friction: 6,
+            tension: 100,
+            useNativeDriver: true,
+        }).start();
+    }, [indiceSprite, animSprite, largurasIndicadores]);
 
-    const temaPrimario = obterEstiloTipo(tipos[0]);
-    const temaSecundario = tipos[1] ? obterEstiloTipo(tipos[1]) : temaPrimario;
-    const coresGradiente = tipos[1]
-        ? [temaPrimario.fundo, temaSecundario.fundo]
-        : [temaPrimario.fundo, '#141418'];
+    const tipos =
+        Array.isArray(pokemon?.types) && pokemon.types.length > 0
+            ? pokemon.types
+            : ['Normal'];
 
-    const urlsSprites = [
-        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${pokemon.shiny ? 'shiny/' : ''}${pokemon.id}.gif`,
-        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/back/${pokemon.shiny ? 'shiny/' : ''}${pokemon.id}.gif`,
-        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`,
+    const tema1 = obterEstiloTipo(tipos[0]);
+    const tema2 = tipos[1] ? obterEstiloTipo(tipos[1]) : tema1;
+    const numeroFormatado = `#${String(pokemon?.id || 0).padStart(2, '0')}`;
+    const pasta = shiny ? 'shiny/' : '';
+
+    const listaSprites = [
+        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/showdown/${pasta}${pokemon?.id}.gif`,
+        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pasta}${pokemon?.id}.png`,
+        `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pasta}${pokemon?.id}.png`,
     ];
 
-    const uriAtual = falhouSprite ? pokemon.image : urlsSprites[modoSprite];
+    const uriAtual = erroSprite
+        ? listaSprites[1]
+        : listaSprites[indiceSprite] || listaSprites[1];
 
     return (
-        <View>
-            <LinearGradient
-                colors={coresGradiente}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.bannerTopo}
-            >
-                <View style={styles.barraAcoesTopo}>
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={onVoltar}
-                        style={styles.botaoVoltar}
-                    >
-                        <Ionicons name="arrow-back" size={20} color={cores.texto} />
-                    </TouchableOpacity>
+        <LinearGradient
+            colors={[tema1.fundo, tema2.fundo]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.bannerContainer}
+        >
+            <View style={styles.barraSuperior}>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={onVoltar}
+                    style={styles.botaoCircular}
+                >
+                    <Ionicons name="arrow-back" size={18} color={cores.texto} />
+                </TouchableOpacity>
 
-                    <Text style={styles.tituloCentro} numberOfLines={1}>
-                        {pokemon.name} #{String(pokemon.id).padStart(2, '0')}
-                    </Text>
-
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={onCapturar}
-                        style={[
-                            styles.botaoCaptura,
-                            capturado && styles.botaoCapturaAtivo,
-                        ]}
-                    >
-                        <View
-                            style={[
-                                styles.losangoCaptura,
-                                capturado && styles.losangoCapturaAtivo,
-                            ]}
-                        />
-                    </TouchableOpacity>
-                </View>
+                <Text style={styles.tituloTopo} numberOfLines={1}>
+                    {pokemon?.name} {numeroFormatado}
+                </Text>
 
                 <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => {
-                        setFalhouSprite(false);
-                        setModoSprite((prev) => (prev + 1) % urlsSprites.length);
-                    }}
-                    style={[styles.palcoSprite, { height: alturaPalco }]}
+                    activeOpacity={0.8}
+                    onPress={onCapturar}
+                    style={[
+                        styles.botaoCircular,
+                        capturado && styles.botaoCapturadoAtivo,
+                    ]}
                 >
-                    <View style={styles.haloSprite} />
-                    {uriAtual ? (
+                    <View
+                        style={[
+                            styles.losangoCaptura,
+                            capturado && styles.losangoCapturaAtivo,
+                        ]}
+                    />
+                </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setIndiceSprite((prev) => (prev + 1) % listaSprites.length)}
+                style={[styles.palcoCentral, { height: alturaPalco }]}
+            >
+                <View style={styles.circuloDestaque}>
+                    <Animated.View
+                        style={{
+                            transform: [{ scale: animSprite }],
+                            opacity: animSprite,
+                        }}
+                    >
                         <Image
                             source={{ uri: uriAtual }}
                             resizeMode="contain"
+                            onError={() => setErroSprite(true)}
                             style={styles.spritePrincipal}
-                            onError={() => setFalhouSprite(true)}
                         />
-                    ) : null}
-                </TouchableOpacity>
+                    </Animated.View>
+                </View>
+            </TouchableOpacity>
 
-                <View style={styles.rodapeBanner}>
-                    <View style={styles.spacerEsquerda} />
+            <View style={styles.barraInferior}>
+                {/* Coluna Esquerda (flex: 1) */}
+                <View style={styles.slotLateralEsquerdo}>
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={onAlternarShiny}
+                        style={[styles.botaoShiny, shiny && styles.botaoShinyAtivo]}
+                    >
+                        <Ionicons
+                            name={shiny ? 'sparkles' : 'sparkles-outline'}
+                            size={13}
+                            color={shiny ? '#FACC15' : cores.texto}
+                        />
+                        <Text style={[styles.textoShiny, shiny && { color: '#FACC15' }]}>
+                            Shiny
+                        </Text>
+                    </TouchableOpacity>
+                </View>
 
-                    <View style={styles.indicadorPontos}>
-                        {urlsSprites.map((_, idx) => (
+                {/* Coluna Central (sempre alinhada ao centro exato da esfera) */}
+                <View style={styles.indicadoresCarrossel}>
+                    {listaSprites.map((_, idx) => {
+                        const ativo = indiceSprite === idx;
+                        return (
                             <TouchableOpacity
                                 key={idx}
-                                onPress={() => {
-                                    setFalhouSprite(false);
-                                    setModoSprite(idx);
-                                }}
-                                style={[
-                                    styles.pontoCarousel,
-                                    modoSprite === idx && styles.pontoCarouselAtivo,
-                                ]}
-                            />
-                        ))}
-                    </View>
+                                activeOpacity={0.8}
+                                onPress={() => setIndiceSprite(idx)}
+                                hitSlop={6}
+                            >
+                                <Animated.View
+                                    style={[
+                                        styles.pontoCarrossel,
+                                        {
+                                            width: largurasIndicadores[idx],
+                                            backgroundColor: ativo
+                                                ? cores.texto
+                                                : 'rgba(255, 255, 255, 0.3)',
+                                        },
+                                    ]}
+                                />
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
 
-                    <View style={styles.grupoTiposBanner}>
-                        {tipos.map((t, index) => {
-                            const estilo = obterEstiloTipo(t);
+                {/* Coluna Direita (flex: 1) */}
+                <View style={styles.slotLateralDireito}>
+                    <View style={styles.grupoTipos}>
+                        {tipos.map((tipo) => {
+                            const estilo = obterEstiloTipo(tipo);
                             return (
                                 <View
-                                    key={`${t}-${index}`}
+                                    key={tipo}
                                     style={[
-                                        styles.pilulaTipoBanner,
-                                        { borderColor: estilo.borda },
+                                        styles.pilulaTipo,
+                                        {
+                                            backgroundColor: `${estilo.fundo}D9`,
+                                            borderColor: estilo.borda,
+                                        },
                                     ]}
                                 >
-                                    <View style={[styles.pontoTipo, { backgroundColor: estilo.principal }]} />
-                                    <Text style={[styles.textoTipoBanner, { color: estilo.principal }]}>
-                                        {t}
+                                    <MaterialCommunityIcons
+                                        name={estilo.icone}
+                                        size={12}
+                                        color={estilo.principal}
+                                    />
+                                    <Text style={[styles.textoTipo, { color: estilo.principal }]}>
+                                        {estilo.label}
                                     </Text>
                                 </View>
                             );
                         })}
                     </View>
                 </View>
-            </LinearGradient>
-
-            <View style={styles.divisorHorizontal} />
-        </View>
+            </View>
+        </LinearGradient>
     );
 }
 
 const styles = StyleSheet.create({
-    bannerTopo: {
+    bannerContainer: {
         paddingTop: espacos.medio,
+        paddingBottom: 12,
         paddingHorizontal: espacos.medio,
-        paddingBottom: espacos.pequeno + 4,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     },
-    barraAcoesTopo: {
+    barraSuperior: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 10,
     },
-    botaoVoltar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(13, 13, 13, 0.45)',
+    botaoCircular: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(0, 0, 0, 0.32)',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.16)',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    tituloCentro: {
-        flex: 1,
-        color: cores.texto,
-        fontSize: fontes.grande,
-        fontWeight: '800',
-        textTransform: 'capitalize',
-        textAlign: 'center',
-    },
-    botaoCaptura: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(13, 13, 13, 0.45)',
-        borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.28)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    botaoCapturaAtivo: {
-        borderColor: '#F59E0B',
-        backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    botaoCapturadoAtivo: {
+        borderColor: '#FACC15',
+        backgroundColor: 'rgba(250, 204, 21, 0.18)',
     },
     losangoCaptura: {
-        width: 15,
-        height: 15,
-        borderRadius: 3,
-        borderWidth: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 2.5,
+        borderWidth: 1.8,
         borderColor: cores.texto,
         transform: [{ rotate: '45deg' }],
     },
     losangoCapturaAtivo: {
-        backgroundColor: '#F59E0B',
-        borderColor: '#FEF3C7',
+        backgroundColor: '#FACC15',
+        borderColor: '#FEF9C3',
     },
-    palcoSprite: {
+    tituloTopo: {
+        flex: 1,
+        color: cores.texto,
+        fontSize: fontes.grande + 2,
+        fontWeight: '800',
+        textAlign: 'center',
+        textTransform: 'capitalize',
+    },
+    palcoCentral: {
         justifyContent: 'center',
         alignItems: 'center',
-        position: 'relative',
     },
-    haloSprite: {
-        position: 'absolute',
+    circuloDestaque: {
         width: 118,
         height: 118,
         borderRadius: 59,
-        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     spritePrincipal: {
-        width: 114,
-        height: 114,
+        width: 98,
+        height: 98,
     },
-    rodapeBanner: {
+    barraInferior: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 2,
     },
-    spacerEsquerda: {
+    slotLateralEsquerdo: {
         flex: 1,
-    },
-    indicadorPontos: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        justifyContent: 'flex-start',
     },
-    pontoCarousel: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    pontoCarouselAtivo: {
-        width: 16,
-        backgroundColor: cores.texto,
-    },
-    grupoTiposBanner: {
+    slotLateralDireito: {
         flex: 1,
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'flex-end',
-        gap: 6,
     },
-    pilulaTipoBanner: {
+    botaoShiny: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+        paddingHorizontal: 11,
+        paddingVertical: 5,
         borderRadius: 9,
-        backgroundColor: 'rgba(13, 13, 13, 0.65)',
+        backgroundColor: 'rgba(0, 0, 0, 0.36)',
         borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.16)',
     },
-    pontoTipo: {
-        width: 6,
+    botaoShinyAtivo: {
+        borderColor: 'rgba(250, 204, 21, 0.65)',
+        backgroundColor: 'rgba(250, 204, 21, 0.18)',
+    },
+    textoShiny: {
+        color: cores.texto,
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    indicadoresCarrossel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        paddingHorizontal: 6,
+    },
+    pontoCarrossel: {
         height: 6,
         borderRadius: 3,
     },
-    textoTipoBanner: {
-        fontSize: fontes.pequena - 1,
+    grupoTipos: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    pilulaTipo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    textoTipo: {
+        fontSize: 11,
         fontWeight: '700',
         textTransform: 'capitalize',
-    },
-    divisorHorizontal: {
-        height: 1.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.14)',
     },
 });

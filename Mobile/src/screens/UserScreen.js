@@ -3,45 +3,74 @@ import {
   StyleSheet,
   Text,
   View,
-  FlatList,
-  TextInput,
+  ScrollView,
   TouchableOpacity,
+  TextInput,
+  Image,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AvatarUser from '../components/AvatarUser';
+import UserBottomNav from '../components/UserBottomNav';
 import { AuthContext } from '../contexts/AuthContext';
-import { criarTime, excluirTime, listarTimes } from '../services/team.service';
+import {
+  listarCapturadosUsuario,
+  listarFavoritosUsuario,
+} from '../services/pokemon.service';
+import { listarTimes } from '../services/team.service';
+import { buscarUsuarioLogado } from '../services/user.service';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
+
+const AVATARES_SUGERIDOS = [
+  { id: 25, nome: 'Pikachu', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png' },
+  { id: 6, nome: 'Charizard', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png' },
+  { id: 94, nome: 'Gengar', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png' },
+  { id: 133, nome: 'Eevee', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png' },
+  { id: 448, nome: 'Lucario', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/448.png' },
+  { id: 150, nome: 'Mewtwo', uri: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png' },
+];
 
 function extrairNomeDoToken(token) {
   if (!token) return 'Treinador';
   try {
-    const partes = token.split('.');
-    if (partes.length < 2) return 'Treinador';
-    const base64 = partes[1].replace(/-/g, '+').replace(/_/g, '/');
-    const json = JSON.parse(atob(base64));
-    return json?.name || json?.usuario || 'Treinador';
+    const payloadBase64 = token.split('.')[1];
+    if (!payloadBase64) return 'Treinador';
+    const base64Normalizado = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonString =
+      typeof atob === 'function'
+        ? decodeURIComponent(
+          atob(base64Normalizado)
+            .split('')
+            .map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
+            .join('')
+        )
+        : '';
+    if (!jsonString) return 'Treinador';
+    const payload = JSON.parse(jsonString);
+    return payload.name || payload.nome || 'Treinador';
   } catch {
     return 'Treinador';
   }
 }
 
 export default function UserScreen({ navigation }) {
-  const { token, atualizarAvatar, sair } = useContext(AuthContext);
+  const { token, sair, fotoUsuario, atualizarFotoUsuario } = useContext(AuthContext);
+  const [nomeTreinador, setNomeTreinador] = useState(() => extrairNomeDoToken(token));
 
-  const [times, setTimes] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [atualizando, setAtualizando] = useState(false);
-  const [erro, setErro] = useState('');
+  const [resumo, setResumo] = useState({
+    times: 0,
+    capturados: 0,
+    shinies: 0,
+    favoritos: 0,
+  });
+  const [carregandoResumo, setCarregandoResumo] = useState(true);
 
-  const [novoTimeNome, setNovoTimeNome] = useState('');
-  const [salvandoTime, setSalvandoTime] = useState(false);
-  const [erroForm, setErroForm] = useState('');
-
-  const nomeTreinador = extrairNomeDoToken(token);
+  const [modalFotoVisivel, setModalFotoVisivel] = useState(false);
+  const [urlFotoDraft, setUrlFotoDraft] = useState('');
 
   const lidarCom401 = useCallback(async (err) => {
     if (err?.status === 401) {
@@ -51,248 +80,355 @@ export default function UserScreen({ navigation }) {
     return false;
   }, [sair]);
 
-  const carregarTimes = useCallback(async (silencioso = false) => {
+  const carregarDadosTreinador = useCallback(async () => {
     if (!token) return;
 
     try {
-      if (!silencioso) setCarregando(true);
-      setErro('');
+      setCarregandoResumo(true);
+      const [perfil, times, capturados, favoritos] = await Promise.all([
+        buscarUsuarioLogado(token).catch(() => null),
+        listarTimes(token),
+        listarCapturadosUsuario(token),
+        listarFavoritosUsuario(token),
+      ]);
 
-      const dados = await listarTimes(token);
-      setTimes(Array.isArray(dados) ? dados : []);
-    } catch (e) {
-      const expirou = await lidarCom401(e);
-      if (!expirou) {
-        setErro(e.message || 'Erro ao carregar times.');
+      if (perfil?.name) {
+        setNomeTreinador(perfil.name);
       }
+
+      const listaCap = Array.isArray(capturados) ? capturados : [];
+      const totalShinies = listaCap.filter((row) => {
+        const poke = row?.pokemons || row;
+        return typeof poke?.shiny === 'boolean' ? poke.shiny : Boolean(row?.catch_shiny);
+      }).length;
+
+      setResumo({
+        times: Array.isArray(times) ? times.length : 0,
+        capturados: listaCap.length,
+        shinies: totalShinies,
+        favoritos: Array.isArray(favoritos) ? favoritos.length : 0,
+      });
+    } catch (e) {
+      await lidarCom401(e);
     } finally {
-      setCarregando(false);
-      setAtualizando(false);
+      setCarregandoResumo(false);
     }
   }, [token, lidarCom401]);
 
   useEffect(() => {
-    carregarTimes();
-  }, [carregarTimes]);
+    carregarDadosTreinador();
+  }, [carregarDadosTreinador]);
 
-  const escolherFotoPerfil = async () => {
-    const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissao.granted) {
-      setErroForm('Permissão para acessar a galeria é necessária para alterar a foto.');
-      return;
-    }
-
-    const resultado = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (token) {
+        carregarDadosTreinador();
+      }
     });
+    return unsubscribe;
+  }, [navigation, token, carregarDadosTreinador]);
 
-    if (!resultado.canceled && resultado.assets?.[0]?.uri) {
-      setErroForm('');
-      await atualizarAvatar(resultado.assets[0].uri);
-    }
+  const abrirModalFoto = () => {
+    setUrlFotoDraft(fotoUsuario || '');
+    setModalFotoVisivel(true);
   };
 
-  const handleCriarTime = async () => {
-    if (!novoTimeNome.trim()) {
-      setErroForm('Informe um nome para o time.');
+  const handleEscolherArquivoLocal = async () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (event) => {
+        const arquivo = event.target?.files?.[0];
+        if (!arquivo) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setUrlFotoDraft(reader.result);
+          }
+        };
+        reader.readAsDataURL(arquivo);
+      };
+      input.click();
       return;
     }
 
     try {
-      setSalvandoTime(true);
-      setErroForm('');
-      await criarTime(token, novoTimeNome.trim());
-      setNovoTimeNome('');
-      await carregarTimes(true);
-    } catch (e) {
-      const expirou = await lidarCom401(e);
-      if (!expirou) {
-        setErroForm(e.message || 'Não foi possível criar o time.');
+      const ImagePicker = require('expo-image-picker');
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!res.canceled && res.assets?.[0]?.uri) {
+        setUrlFotoDraft(res.assets[0].uri);
       }
-    } finally {
-      setSalvandoTime(false);
+    } catch {
+      // Fallback via URL ou avatares sugeridos
     }
   };
 
-  const handleExcluirTime = async (idTime) => {
-    try {
-      setErro('');
-      await excluirTime(token, idTime);
-      setTimes((prev) => prev.filter((t) => t.id !== idTime));
-    } catch (e) {
-      const expirou = await lidarCom401(e);
-      if (!expirou) {
-        setErro(e.message || 'Não foi possível excluir o time.');
-      }
-    }
-  };
-
-  const handleSair = async () => {
-    await sair();
+  const handleSalvarFoto = async () => {
+    await atualizarFotoUsuario(urlFotoDraft);
+    setModalFotoVisivel(false);
   };
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#232329', '#141418']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.headerUsuario}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollConteudo}
       >
-        <View style={styles.linhaTopo}>
-          <AvatarUser
-            tamanho={68}
-            mostrarBadgeEdicao
-            onPress={escolherFotoPerfil}
-          />
+        <LinearGradient
+          colors={['#251B18', '#141418']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.cardPerfil}
+        >
+          <View style={styles.linhaPerfil}>
+            <AvatarUser
+              tamanho={72}
+              nome={nomeTreinador}
+              editavel
+              onPress={abrirModalFoto}
+            />
 
-          <View style={styles.infoTreinador}>
-            <Text style={styles.tagPerfil}>TREINADOR</Text>
-            <Text style={styles.nomeUsuario} numberOfLines={1}>
-              {nomeTreinador}
-            </Text>
-            <TouchableOpacity onPress={escolherFotoPerfil} style={styles.linkFoto}>
-              <Text style={styles.textoLinkFoto}>Alterar foto de perfil</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={handleSair}
-            style={styles.botaoLogout}
-          >
-            <Ionicons name="log-out-outline" size={18} color={cores.erro} />
-            <Text style={styles.textoLogout}>Sair</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.blocoNovoTime}>
-        <Text style={styles.labelSecao}>Nome do Time</Text>
-        <View style={styles.linhaInputTime}>
-          <TextInput
-            style={styles.inputTime}
-            placeholder="Ex.: Time Kanto..."
-            placeholderTextColor={cores.textoSecundario}
-            value={novoTimeNome}
-            onChangeText={setNovoTimeNome}
-          />
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={salvandoTime}
-            onPress={handleCriarTime}
-            style={styles.botaoCriarTime}
-          >
-            {salvandoTime ? (
-              <ActivityIndicator size="small" color={cores.texto} />
-            ) : (
-              <Ionicons name="add" size={22} color={cores.texto} />
-            )}
-          </TouchableOpacity>
-        </View>
-        {erroForm ? <Text style={styles.textoErroForm}>{erroForm}</Text> : null}
-      </View>
-
-      <View style={styles.cabecalhoLista}>
-        <Text style={styles.tituloLista}>Meus Times</Text>
-        <Text style={styles.contadorTimes}>
-          {times.length} {times.length === 1 ? 'time' : 'times'}
-        </Text>
-      </View>
-
-      {carregando ? (
-        <View style={styles.centralizado}>
-          <ActivityIndicator size="large" color={cores.primaria} />
-          <Text style={styles.textoStatus}>Carregando times...</Text>
-        </View>
-      ) : erro ? (
-        <View style={styles.centralizado}>
-          <Text style={styles.textoErro}>{erro}</Text>
-          <TouchableOpacity
-            style={styles.botaoTentarNovamente}
-            onPress={() => carregarTimes()}
-          >
-            <Text style={styles.textoBotao}>Tentar novamente</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={times}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listaConteudo}
-          showsVerticalScrollIndicator={false}
-          refreshing={atualizando}
-          onRefresh={() => {
-            setAtualizando(true);
-            carregarTimes(true);
-          }}
-          ListEmptyComponent={
-            <View style={styles.vazioBox}>
-              <Ionicons name="shield-outline" size={30} color={cores.textoSecundario} />
-              <Text style={styles.textoStatus}>Nenhum time cadastrado ainda.</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.cardTime}>
-              <View style={styles.iconeTimeBox}>
-                <Ionicons name="shield-half-outline" size={22} color={cores.primaria} />
-              </View>
-
-              <View style={styles.detalhesTime}>
-                <Text style={styles.nomeTime} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.subTime}>
-                  {Array.isArray(item.pokemons) ? `${item.pokemons.length} Pokémon` : 'Equipe'}
-                </Text>
-              </View>
-
+            <View style={styles.infoTreinador}>
+              <Text style={styles.tagTreinador}>TREINADOR POKÉMON</Text>
+              <Text style={styles.nomeTreinador} numberOfLines={1}>
+                {nomeTreinador}
+              </Text>
               <TouchableOpacity
                 activeOpacity={0.75}
-                onPress={() => handleExcluirTime(item.id)}
-                style={styles.botaoExcluir}
-                hitSlop={8}
+                onPress={abrirModalFoto}
+                style={styles.linkEditarFoto}
               >
-                <Ionicons name="trash-outline" size={18} color={cores.erro} />
+                <Ionicons name="image-outline" size={13} color={cores.primaria} />
+                <Text style={styles.textoLinkEditarFoto}>Alterar foto de perfil</Text>
               </TouchableOpacity>
             </View>
-          )}
-        />
-      )}
 
-      <View style={styles.barraInferiorUsuario}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('UserFavoritesScreen')}
-          style={styles.botaoNavInferior}
-        >
-          <View style={styles.losangoFavoritos} />
-          <Text style={styles.labelNavInferior}>Favoritos</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('PokedexScreen')}
-          style={styles.botaoNavInferior}
-        >
-          <View style={styles.iconePokedexNav}>
-            <View style={styles.circuloCentralNav} />
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={sair}
+              style={styles.botaoSair}
+            >
+              <Ionicons name="log-out-outline" size={18} color={cores.erro} />
+              <Text style={styles.textoSair}>Sair</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.labelNavInferior}>Pokédex</Text>
+        </LinearGradient>
+
+        <View style={styles.gradeEstatisticas}>
+          <View style={styles.cardStat}>
+            <Ionicons name="shield-half-outline" size={18} color={cores.primaria} />
+            <Text style={styles.valorStat}>
+              {carregandoResumo ? '--' : resumo.times}
+            </Text>
+            <Text style={styles.labelStat}>Times</Text>
+          </View>
+
+          <View style={styles.cardStat}>
+            <MaterialCommunityIcons name="pokeball" size={18} color="#38BDF8" />
+            <Text style={styles.valorStat}>
+              {carregandoResumo ? '--' : resumo.capturados}
+            </Text>
+            <Text style={styles.labelStat}>Capturados</Text>
+          </View>
+
+          <View style={styles.cardStat}>
+            <Ionicons name="sparkles" size={18} color="#FACC15" />
+            <Text style={styles.valorStat}>
+              {carregandoResumo ? '--' : resumo.shinies}
+            </Text>
+            <Text style={styles.labelStat}>Shinies</Text>
+          </View>
+
+          <View style={styles.cardStat}>
+            <Ionicons name="star" size={18} color="#F59E0B" />
+            <Text style={styles.valorStat}>
+              {carregandoResumo ? '--' : resumo.favoritos}
+            </Text>
+            <Text style={styles.labelStat}>Favoritos</Text>
+          </View>
+        </View>
+
+        <Text style={styles.tituloSecao}>Central do Treinador</Text>
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('TeamScreen')}
+          style={[styles.cardAtalho, styles.cardAtalhoDestaque]}
+        >
+          <View style={[styles.iconeAtalho, { backgroundColor: cores.primariaClara }]}>
+            <Ionicons name="people" size={22} color={cores.primaria} />
+          </View>
+
+          <View style={styles.textoAtalhoBox}>
+            <View style={styles.linhaTituloAtalho}>
+              <Text style={styles.tituloAtalho}>Meus Times</Text>
+              <View style={styles.badgeAtalho}>
+                <Text style={styles.textoBadgeAtalho}>{resumo.times}</Text>
+              </View>
+            </View>
+            <Text style={styles.descAtalho}>
+              Monte equipes de até 6 Pokémon com seus capturados ou da Pokédex
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={20} color={cores.primaria} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           onPress={() => navigation.navigate('UserCapturedScreen')}
-          style={styles.botaoNavInferior}
+          style={styles.cardAtalho}
         >
-          <View style={styles.circuloCapturados} />
-          <Text style={styles.labelNavInferior}>Capturados</Text>
+          <View style={[styles.iconeAtalho, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
+            <MaterialCommunityIcons name="pokeball" size={22} color="#38BDF8" />
+          </View>
+
+          <View style={styles.textoAtalhoBox}>
+            <View style={styles.linhaTituloAtalho}>
+              <Text style={styles.tituloAtalho}>Pokémons Capturados</Text>
+              <View style={styles.badgeAtalho}>
+                <Text style={[styles.textoBadgeAtalho, { color: '#38BDF8' }]}>
+                  {resumo.capturados}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.descAtalho}>
+              Gerencie seus Pokémons normais e shinies capturados
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={20} color={cores.textoSecundario} />
         </TouchableOpacity>
-      </View>
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('UserFavoritesScreen')}
+          style={styles.cardAtalho}
+        >
+          <View style={[styles.iconeAtalho, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+            <Ionicons name="star" size={22} color="#F59E0B" />
+          </View>
+
+          <View style={styles.textoAtalhoBox}>
+            <View style={styles.linhaTituloAtalho}>
+              <Text style={styles.tituloAtalho}>Favoritos</Text>
+              <View style={styles.badgeAtalho}>
+                <Text style={[styles.textoBadgeAtalho, { color: '#F59E0B' }]}>
+                  {resumo.favoritos}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.descAtalho}>
+              Acesse seus Pokémons marcados como favoritos
+            </Text>
+          </View>
+
+          <Ionicons name="chevron-forward" size={20} color={cores.textoSecundario} />
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Modal Alterar Foto de Perfil */}
+      <Modal
+        visible={modalFotoVisivel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalFotoVisivel(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setModalFotoVisivel(false)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitulo}>Foto do Treinador</Text>
+              <TouchableOpacity onPress={() => setModalFotoVisivel(false)}>
+                <Ionicons name="close" size={20} color={cores.texto} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.previewFotoBox}>
+              <AvatarUser
+                tamanho={86}
+                uriOverride={urlFotoDraft}
+                nome={nomeTreinador}
+              />
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleEscolherArquivoLocal}
+                style={styles.botaoUploadFoto}
+              >
+                <Ionicons name="folder-open-outline" size={16} color={cores.texto} />
+                <Text style={styles.textoBotaoUpload}>Escolher imagem do dispositivo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.labelInput}>Ou cole a URL da imagem</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="https://..."
+              placeholderTextColor={cores.textoSecundario}
+              value={urlFotoDraft.startsWith('data:') ? '' : urlFotoDraft}
+              onChangeText={setUrlFotoDraft}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.labelInput}>Avatares rápidos</Text>
+            <View style={styles.gradeAvataresRapidos}>
+              {AVATARES_SUGERIDOS.map((av) => {
+                const selecionado = urlFotoDraft === av.uri;
+                return (
+                  <TouchableOpacity
+                    key={av.id}
+                    activeOpacity={0.8}
+                    onPress={() => setUrlFotoDraft(av.uri)}
+                    style={[
+                      styles.itemAvatarRapido,
+                      selecionado && styles.itemAvatarRapidoAtivo,
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: av.uri }}
+                      resizeMode="contain"
+                      style={styles.imgAvatarRapido}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.rodapeModalFoto}>
+              {urlFotoDraft ? (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setUrlFotoDraft('')}
+                  style={styles.botaoRemoverFoto}
+                >
+                  <Text style={styles.textoRemoverFoto}>Remover</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleSalvarFoto}
+                style={styles.botaoConfirmarModal}
+              >
+                <Text style={styles.textoBotao}>Salvar Foto</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <UserBottomNav abaAtiva="perfil" navigation={navigation} />
     </View>
   );
 }
@@ -302,246 +438,264 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: cores.fundo,
   },
-  centralizado: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: espacos.grande,
+  scrollConteudo: {
+    padding: espacos.medio,
+    paddingBottom: espacos.grande * 1.5,
+    gap: 14,
   },
-  headerUsuario: {
-    margin: espacos.medio,
-    marginBottom: 12,
+  cardPerfil: {
     padding: espacos.medio,
     borderRadius: bordas.raio + 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
+    borderColor: 'rgba(217, 80, 50, 0.3)',
   },
-  linhaTopo: {
+  linhaPerfil: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   infoTreinador: {
     flex: 1,
   },
-  tagPerfil: {
+  tagTreinador: {
     color: cores.primaria,
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.5,
+    letterSpacing: 1.3,
   },
-  nomeUsuario: {
+  nomeTreinador: {
     color: cores.texto,
     fontSize: fontes.titulo,
     fontWeight: '800',
     marginTop: 2,
   },
-  linkFoto: {
-    marginTop: 4,
-  },
-  textoLinkFoto: {
-    color: '#38BDF8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  botaoLogout: {
+  linkEditarFoto: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: bordas.raio,
-    backgroundColor: cores.erroFundo,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
+    gap: 5,
+    marginTop: 5,
   },
-  textoLogout: {
-    color: cores.erro,
-    fontSize: fontes.pequena,
+  textoLinkEditarFoto: {
+    color: cores.primaria,
+    fontSize: 12,
     fontWeight: '700',
   },
-  blocoNovoTime: {
-    marginHorizontal: espacos.medio,
+  botaoSair: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+  },
+  textoSair: {
+    color: cores.erro,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  gradeEstatisticas: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cardStat: {
+    flex: 1,
     backgroundColor: cores.superficie,
     borderRadius: bordas.raio + 2,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     borderWidth: 1,
     borderColor: cores.borda,
-    gap: 8,
-  },
-  labelSecao: {
-    color: cores.texto,
-    fontSize: fontes.pequena,
-    fontWeight: '700',
-  },
-  linhaInputTime: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
-  inputTime: {
-    flex: 1,
-    backgroundColor: cores.fundo,
+  valorStat: {
     color: cores.texto,
-    fontSize: fontes.normal,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: bordas.raio,
-    borderWidth: 1,
-    borderColor: cores.borda,
+    fontSize: fontes.grande + 1,
+    fontWeight: '800',
   },
-  botaoCriarTime: {
-    width: 42,
-    height: 42,
-    borderRadius: bordas.raio,
-    backgroundColor: cores.primaria,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  textoErroForm: {
-    color: cores.erro,
-    fontSize: 12,
+  labelStat: {
+    color: cores.textoSecundario,
+    fontSize: 11,
     fontWeight: '600',
   },
-  cabecalhoLista: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: espacos.medio,
-    marginTop: 14,
-    marginBottom: 8,
-  },
-  tituloLista: {
+  tituloSecao: {
     color: cores.texto,
     fontSize: fontes.grande,
-    fontWeight: '700',
+    fontWeight: '800',
+    marginTop: 2,
   },
-  contadorTimes: {
-    color: cores.textoSecundario,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  listaConteudo: {
-    paddingHorizontal: espacos.medio,
-    paddingBottom: espacos.grande,
-    gap: 10,
-  },
-  cardTime: {
+  cardAtalho: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: cores.superficie,
-    borderRadius: bordas.raio + 2,
-    padding: 12,
+    borderRadius: bordas.raio + 4,
+    padding: espacos.medio,
     borderWidth: 1,
     borderColor: cores.borda,
   },
-  iconeTimeBox: {
-    width: 44,
+  cardAtalhoDestaque: {
+    borderColor: 'rgba(217, 80, 50, 0.38)',
+  },
+  iconeAtalho: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textoAtalhoBox: {
+    flex: 1,
+    gap: 3,
+  },
+  linhaTituloAtalho: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tituloAtalho: {
+    color: cores.texto,
+    fontSize: fontes.normal + 1,
+    fontWeight: '800',
+  },
+  badgeAtalho: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  textoBadgeAtalho: {
+    color: cores.primaria,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  descAtalho: {
+    color: cores.textoSecundario,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: espacos.medio,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#18181D',
+    borderRadius: 18,
+    padding: espacos.medio + 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitulo: {
+    color: cores.texto,
+    fontSize: fontes.grande + 1,
+    fontWeight: '800',
+  },
+  previewFotoBox: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 6,
+  },
+  botaoUploadFoto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: cores.fundo,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  textoBotaoUpload: {
+    color: cores.texto,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  labelInput: {
+    color: cores.textoSecundario,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  input: {
     height: 44,
+    backgroundColor: cores.fundo,
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    color: cores.texto,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    outlineStyle: 'none',
+  },
+  gradeAvataresRapidos: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  itemAvatarRapido: {
+    flex: 1,
+    aspectRatio: 1,
     borderRadius: 12,
     backgroundColor: cores.fundo,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: cores.borda,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
+  },
+  itemAvatarRapidoAtivo: {
+    borderColor: cores.primaria,
+    backgroundColor: cores.primariaClara,
+  },
+  imgAvatarRapido: {
+    width: '85%',
+    height: '85%',
+  },
+  rodapeModalFoto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  botaoRemoverFoto: {
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 11,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  detalhesTime: {
-    flex: 1,
-  },
-  nomeTime: {
-    color: cores.texto,
-    fontSize: fontes.normal + 1,
+  textoRemoverFoto: {
+    color: cores.erro,
+    fontSize: 12,
     fontWeight: '700',
   },
-  subTime: {
-    color: cores.textoSecundario,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  botaoExcluir: {
-    padding: 6,
-  },
-  vazioBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-    gap: 8,
-  },
-  textoStatus: {
-    color: cores.textoSecundario,
-    fontSize: fontes.normal,
-    marginTop: espacos.pequeno,
-  },
-  textoErro: {
-    color: cores.erro,
-    fontSize: fontes.normal,
-    textAlign: 'center',
-    marginBottom: espacos.medio,
-  },
-  botaoTentarNovamente: {
+  botaoConfirmarModal: {
+    flex: 1,
+    height: 44,
+    borderRadius: 11,
     backgroundColor: cores.primaria,
-    paddingHorizontal: espacos.grande,
-    paddingVertical: 10,
-    borderRadius: bordas.raio,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   textoBotao: {
     color: cores.texto,
     fontSize: fontes.normal,
     fontWeight: '700',
-  },
-  barraInferiorUsuario: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#141418',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.12)',
-    paddingVertical: 10,
-    paddingHorizontal: espacos.medio,
-  },
-  botaoNavInferior: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minWidth: 76,
-  },
-  losangoFavoritos: {
-    width: 18,
-    height: 18,
-    borderRadius: 3,
-    backgroundColor: '#F59E0B',
-    borderWidth: 1.5,
-    borderColor: '#FEF3C7',
-    transform: [{ rotate: '45deg' }],
-    marginVertical: 2,
-  },
-  iconePokedexNav: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: cores.texto,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  circuloCentralNav: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: cores.primaria,
-  },
-  circuloCapturados: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#38BDF8',
-    backgroundColor: 'rgba(56, 189, 248, 0.18)',
-  },
-  labelNavInferior: {
-    color: cores.textoSecundario,
-    fontSize: 11,
-    fontWeight: '600',
   },
 });

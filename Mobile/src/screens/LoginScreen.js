@@ -38,7 +38,6 @@ export default function LoginScreen({ navigation }) {
         }
     };
 
-    // Frame 05b-Login(Error) fiel ao protótipo Excalidraw
     if (erroLogin) {
         return (
             <View style={styles.containerErro}>
@@ -223,7 +222,6 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         letterSpacing: 0.8,
     },
-    // Estilos do Frame 05b-Login(Error)
     containerErro: {
         flex: 1,
         backgroundColor: '#DC2626',

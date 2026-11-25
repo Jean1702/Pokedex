@@ -1,54 +1,40 @@
 import { request } from './api';
 
-function ensureToken(token) {
-  if (!token || typeof token !== 'string' || !token.trim()) {
-    throw new Error('Token de autenticação inválido ou ausente.');
-  }
-}
+export const listarTimes = (token) =>
+  request('/teams', { token });
 
-export const listarTimes = async (token) => {
-  ensureToken(token);
-  return request('/teams', {
-    method: 'GET',
-    token,
-  });
-};
+export const buscarTimePorId = (token, teamId) =>
+  request(`/teams/${teamId}`, { token });
 
-export const buscarTimePorId = async (token, id) => {
-  ensureToken(token);
-  const teamId = Number(id);
-  if (!Number.isInteger(teamId) || teamId <= 0) {
-    throw new Error('ID do time inválido.');
-  }
-  return request(`/teams/${teamId}`, {
-    method: 'GET',
-    token,
-  });
-};
-
-export const criarTime = async (token, nome) => {
-  ensureToken(token);
-  const formattedName = typeof nome === 'string' ? nome.trim() : '';
-  if (!formattedName) {
-    throw new Error('O nome do time é obrigatório.');
-  }
-
-  return request('/teams', {
+export const criarTime = (token, { name, style = null, image = null }) =>
+  request('/teams', {
     method: 'POST',
-    body: { name: formattedName },
+    body: { name, style, image },
     token,
   });
-};
 
-export const excluirTime = async (token, id) => {
-  ensureToken(token);
-  const teamId = Number(id);
-  if (!Number.isInteger(teamId) || teamId <= 0) {
-    throw new Error('ID do time inválido.');
-  }
+export const atualizarTime = (token, teamId, { name, style }) =>
+  request(`/teams/${teamId}`, {
+    method: 'PUT',
+    body: { name, style },
+    token,
+  });
 
-  return request(`/teams/${teamId}`, {
+export const adicionarPokemonAoTime = (token, teamId, { id_pokemon, shiny = false }) =>
+  request(`/teams/${teamId}/pokemons`, {
+    method: 'POST',
+    body: { id_pokemon, shiny: Boolean(shiny) },
+    token,
+  });
+
+export const removerPokemonDoTime = (token, teamId, pokemonTeamId) =>
+  request(`/teams/${teamId}/pokemons/${pokemonTeamId}`, {
     method: 'DELETE',
     token,
   });
-};
+
+export const excluirTime = (token, teamId) =>
+  request(`/teams/${teamId}`, {
+    method: 'DELETE',
+    token,
+  });

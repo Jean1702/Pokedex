@@ -7,11 +7,13 @@ import {
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomHudPokemon from '../components/BottomHudPokemon';
 import PokemonHeaderBanner, { obterEstiloTipo } from '../components/PokemonHeaderBanner';
 import { AuthContext } from '../contexts/AuthContext';
 import {
     buscarInformacoesExtrasPokemon,
+    buscarStatusPokemonUsuario,
     capturarPokemon,
 } from '../services/pokemon.service';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
@@ -42,13 +44,50 @@ function formatarTextoSlug(texto) {
 }
 
 export default function InfoPokemonScreen({ route, navigation }) {
-    const { id } = route.params || {};
+    const { id, pokemon: pokemonParam, shiny: shinyParam } = route.params || {};
     const { token, sair } = useContext(AuthContext);
 
     const [dados, setDados] = useState(null);
+    const [ehShiny, setEhShiny] = useState(
+        shinyParam !== undefined ? Boolean(shinyParam) : Boolean(pokemonParam?.shiny)
+    );
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState('');
-    const [capturado, setCapturado] = useState(false);
+    const [statusUsuario, setStatusUsuario] = useState({
+        catchNormal: false,
+        catchShiny: false,
+        favNormal: false,
+        favShiny: false,
+    });
+
+    const capturado = ehShiny ? statusUsuario.catchShiny : statusUsuario.catchNormal;
+
+    useEffect(() => {
+        if (shinyParam !== undefined) {
+            setEhShiny(Boolean(shinyParam));
+        }
+    }, [shinyParam, id]);
+
+    const carregarStatusUsuario = useCallback(async (pokemonId) => {
+        if (!token || !pokemonId) {
+            setStatusUsuario({
+                catchNormal: false,
+                catchShiny: false,
+                favNormal: false,
+                favShiny: false,
+            });
+            return;
+        }
+
+        try {
+            const status = await buscarStatusPokemonUsuario(token, pokemonId);
+            setStatusUsuario(status);
+        } catch (e) {
+            if (e?.status === 401) {
+                await sair();
+            }
+        }
+    }, [token, sair]);
 
     const carregarDados = useCallback(async () => {
         if (!id) return;
@@ -58,16 +97,31 @@ export default function InfoPokemonScreen({ route, navigation }) {
             setErro('');
             const resposta = await buscarInformacoesExtrasPokemon(id);
             setDados(resposta);
+            if (shinyParam === undefined) {
+                setEhShiny(Boolean(resposta.shiny));
+            }
         } catch (e) {
             setErro(e.message || 'Erro ao carregar informações detalhadas.');
         } finally {
             setCarregando(false);
         }
-    }, [id]);
+    }, [id, shinyParam]);
 
     useEffect(() => {
         carregarDados();
-    }, [carregarDados]);
+        if (id) {
+            carregarStatusUsuario(id);
+        }
+    }, [carregarDados, id, carregarStatusUsuario]);
+
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            if (id && token) {
+                carregarStatusUsuario(id);
+            }
+        });
+        return unsubscribe;
+    }, [navigation, id, token, carregarStatusUsuario]);
 
     const handleCapturar = async () => {
         if (!token) {
@@ -75,13 +129,14 @@ export default function InfoPokemonScreen({ route, navigation }) {
             return;
         }
 
-        const novoValor = !capturado;
-        setCapturado(novoValor);
+        const chave = ehShiny ? 'catchShiny' : 'catchNormal';
+        const novoValor = !statusUsuario[chave];
+        setStatusUsuario((prev) => ({ ...prev, [chave]: novoValor }));
 
         try {
-            await capturarPokemon(token, dados.id, novoValor);
+            await capturarPokemon(token, dados.id, novoValor, ehShiny);
         } catch (e) {
-            setCapturado(!novoValor);
+            setStatusUsuario((prev) => ({ ...prev, [chave]: !novoValor }));
             if (e.status === 401) {
                 await sair();
                 navigation.navigate('LoginScreen');
@@ -135,6 +190,8 @@ export default function InfoPokemonScreen({ route, navigation }) {
             >
                 <PokemonHeaderBanner
                     pokemon={dados}
+                    shiny={ehShiny}
+                    onAlternarShiny={() => setEhShiny((prev) => !prev)}
                     capturado={capturado}
                     onVoltar={() => navigation.goBack()}
                     onCapturar={handleCapturar}
@@ -159,6 +216,11 @@ export default function InfoPokemonScreen({ route, navigation }) {
                                                     { backgroundColor: `${estilo.fundo}CC`, borderColor: estilo.borda },
                                                 ]}
                                             >
+                                                <MaterialCommunityIcons
+                                                    name={estilo.icone}
+                                                    size={12}
+                                                    color={estilo.principal}
+                                                />
                                                 <Text style={[styles.textoBadgeTipo, { color: estilo.principal }]}>
                                                     {item.type}
                                                 </Text>
@@ -188,6 +250,11 @@ export default function InfoPokemonScreen({ route, navigation }) {
                                                     { backgroundColor: `${estilo.fundo}CC`, borderColor: estilo.borda },
                                                 ]}
                                             >
+                                                <MaterialCommunityIcons
+                                                    name={estilo.icone}
+                                                    size={12}
+                                                    color={estilo.principal}
+                                                />
                                                 <Text style={[styles.textoBadgeTipo, { color: estilo.principal }]}>
                                                     {item.type}
                                                 </Text>
@@ -217,6 +284,11 @@ export default function InfoPokemonScreen({ route, navigation }) {
                                                     { backgroundColor: `${estilo.fundo}CC`, borderColor: estilo.borda },
                                                 ]}
                                             >
+                                                <MaterialCommunityIcons
+                                                    name={estilo.icone}
+                                                    size={12}
+                                                    color={estilo.principal}
+                                                />
                                                 <Text style={[styles.textoBadgeTipo, { color: estilo.principal }]}>
                                                     {item.type}
                                                 </Text>
@@ -337,6 +409,7 @@ export default function InfoPokemonScreen({ route, navigation }) {
                 abaAtiva="info"
                 navigation={navigation}
                 pokemon={dados}
+                shiny={ehShiny}
             />
         </View>
     );
@@ -401,8 +474,8 @@ const styles = StyleSheet.create({
     badgeEfetividade: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingLeft: 10,
+        gap: 5,
+        paddingLeft: 9,
         paddingRight: 5,
         paddingVertical: 4,
         borderRadius: 9,

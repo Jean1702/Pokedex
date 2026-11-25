@@ -74,18 +74,27 @@ function extrairEvolucoes(noCadeia, lista = []) {
     return lista;
 }
 
-export const listarPokemons = (type) => {
-  const query = type && type !== 'Todos' ? `?type=${encodeURIComponent(type)}` : '';
-  return request(`/pokemons${query}`);
+export const listarPokemons = (tipos) => {
+    const lista = Array.isArray(tipos)
+        ? tipos.filter((t) => t && t !== 'Todos')
+        : tipos && tipos !== 'Todos'
+            ? [tipos]
+            : [];
+
+    const query = lista.length > 0 ? `?type=${encodeURIComponent(lista.join(','))}` : '';
+    return request(`/pokemons${query}`);
 };
 
 export const buscarPokemonPorId = (id) =>
-  request(`/pokemons/${id}`);
+    request(`/pokemons/${id}`);
 
 export const buscarDetalhesCompletosPokemon = async (id) => {
     const dadosBase = await buscarPokemonPorId(id);
 
-    let descricao = 'Nenhuma descrição registrada na Pokédex para esta espécie.';
+    let descricao =
+        dadosBase.description_pt ||
+        dadosBase.descricao ||
+        '';
     let evolucoes = [];
 
     try {
@@ -93,12 +102,14 @@ export const buscarDetalhesCompletosPokemon = async (id) => {
         if (respEspecie.ok) {
             const dadosEspecie = await respEspecie.json();
 
-            const entradaTexto =
-                dadosEspecie.flavor_text_entries?.find((e) => e.language.name === 'en') ||
-                dadosEspecie.flavor_text_entries?.[0];
+            if (!descricao) {
+                const entradaTexto =
+                    dadosEspecie.flavor_text_entries?.find((e) => e.language.name === 'en') ||
+                    dadosEspecie.flavor_text_entries?.[0];
 
-            if (entradaTexto?.flavor_text) {
-                descricao = entradaTexto.flavor_text.replace(/[\n\f\r]+/g, ' ').trim();
+                if (entradaTexto?.flavor_text) {
+                    descricao = entradaTexto.flavor_text.replace(/[\n\f\r]+/g, ' ').trim();
+                }
             }
 
             if (dadosEspecie.evolution_chain?.url) {
@@ -115,7 +126,7 @@ export const buscarDetalhesCompletosPokemon = async (id) => {
 
     return {
         ...dadosBase,
-        descricao,
+        descricao: descricao || 'Descrição não disponível.',
         evolucoes,
     };
 };
@@ -238,16 +249,86 @@ export const buscarDetalhesAtaques = async (nomesAtaques) => {
     return resultado;
 };
 
-export const favoritarPokemon = (token, id, favority) =>
+export const favoritarPokemon = (token, id, favority, shiny = false) =>
     request(`/pokemons/${id}/favorite`, {
         method: 'PUT',
-        body: { favority },
+        body: { favority, shiny: Boolean(shiny) },
         token,
     });
 
-export const capturarPokemon = (token, id, isCaught) =>
+export const capturarPokemon = (token, id, isCaught, shiny = false) =>
     request(`/pokemons/${id}/catch`, {
         method: 'PUT',
-        body: { catch: isCaught },
+        body: { catch: isCaught, shiny: Boolean(shiny) },
         token,
     });
+
+export const listarFavoritosUsuario = async (token) => {
+    try {
+        return await request('/users/me/favorites', { token });
+    } catch (e) {
+        if (e?.status === 404) {
+            return request('/pokemons/favorites', { token });
+        }
+        throw e;
+    }
+};
+
+export const listarCapturadosUsuario = async (token) => {
+    try {
+        return await request('/users/me/captured', { token });
+    } catch (e) {
+        if (e?.status === 404) {
+            return request('/pokemons/captured', { token });
+        }
+        throw e;
+    }
+};
+
+export async function buscarStatusPokemonUsuario(token, pokemonId) {
+    if (!token || !pokemonId) {
+        return {
+            catchNormal: false,
+            catchShiny: false,
+            favNormal: false,
+            favShiny: false,
+        };
+    }
+
+    const idAlvo = Number(pokemonId);
+    const [capturados, favoritos] = await Promise.all([
+        listarCapturadosUsuario(token),
+        listarFavoritosUsuario(token),
+    ]);
+
+    const status = {
+        catchNormal: false,
+        catchShiny: false,
+        favNormal: false,
+        favShiny: false,
+    };
+
+    if (Array.isArray(capturados)) {
+        capturados.forEach((row) => {
+            const poke = row?.pokemons || row;
+            if (Number(poke?.id || row?.id_pokemon) !== idAlvo) return;
+            const ehShinyRow =
+                typeof poke?.shiny === 'boolean' ? poke.shiny : Boolean(row?.catch_shiny);
+            if (ehShinyRow) status.catchShiny = true;
+            else status.catchNormal = true;
+        });
+    }
+
+    if (Array.isArray(favoritos)) {
+        favoritos.forEach((row) => {
+            const poke = row?.pokemons || row;
+            if (Number(poke?.id || row?.id_pokemon) !== idAlvo) return;
+            const ehShinyRow =
+                typeof poke?.shiny === 'boolean' ? poke.shiny : Boolean(row?.favority_shiny);
+            if (ehShinyRow) status.favShiny = true;
+            else status.favNormal = true;
+        });
+    }
+
+    return status;
+}

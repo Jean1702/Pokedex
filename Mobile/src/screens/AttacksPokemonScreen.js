@@ -8,13 +8,14 @@ import {
     ActivityIndicator,
     ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomHudPokemon from '../components/BottomHudPokemon';
 import PokemonHeaderBanner, { obterEstiloTipo } from '../components/PokemonHeaderBanner';
 import { AuthContext } from '../contexts/AuthContext';
 import {
     buscarDetalhesAtaques,
     buscarPokemonPorId,
+    buscarStatusPokemonUsuario,
     capturarPokemon,
 } from '../services/pokemon.service';
 import { cores, fontes, espacos, bordas } from '../styles/theme';
@@ -54,10 +55,13 @@ function formatarNomeGolpe(slug) {
 }
 
 export default function AttacksPokemonScreen({ route, navigation }) {
-    const { id, pokemon: pokemonParam } = route.params || {};
+    const { id, pokemon: pokemonParam, shiny: shinyParam } = route.params || {};
     const { token, sair } = useContext(AuthContext);
 
     const [pokemon, setPokemon] = useState(pokemonParam || null);
+    const [ehShiny, setEhShiny] = useState(
+        shinyParam !== undefined ? Boolean(shinyParam) : Boolean(pokemonParam?.shiny)
+    );
     const [carregandoPokemon, setCarregandoPokemon] = useState(!pokemonParam?.moves);
     const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
     const [erro, setErro] = useState('');
@@ -65,7 +69,41 @@ export default function AttacksPokemonScreen({ route, navigation }) {
     const [metodoSelecionado, setMetodoSelecionado] = useState('todos');
     const [geracaoSelecionada, setGeracaoSelecionada] = useState('todas');
     const [detalhesMapa, setDetalhesMapa] = useState({});
-    const [capturado, setCapturado] = useState(false);
+    const [statusUsuario, setStatusUsuario] = useState({
+        catchNormal: false,
+        catchShiny: false,
+        favNormal: false,
+        favShiny: false,
+    });
+
+    const capturado = ehShiny ? statusUsuario.catchShiny : statusUsuario.catchNormal;
+
+    useEffect(() => {
+        if (shinyParam !== undefined) {
+            setEhShiny(Boolean(shinyParam));
+        }
+    }, [shinyParam, id]);
+
+    const carregarStatusUsuario = useCallback(async (pokemonId) => {
+        if (!token || !pokemonId) {
+            setStatusUsuario({
+                catchNormal: false,
+                catchShiny: false,
+                favNormal: false,
+                favShiny: false,
+            });
+            return;
+        }
+
+        try {
+            const status = await buscarStatusPokemonUsuario(token, pokemonId);
+            setStatusUsuario(status);
+        } catch (e) {
+            if (e?.status === 401) {
+                await sair();
+            }
+        }
+    }, [token, sair]);
 
     const carregarBase = useCallback(async () => {
         if (pokemonParam?.moves) {
@@ -81,16 +119,33 @@ export default function AttacksPokemonScreen({ route, navigation }) {
             setErro('');
             const dados = await buscarPokemonPorId(id);
             setPokemon(dados);
+            if (shinyParam === undefined) {
+                setEhShiny(Boolean(dados.shiny));
+            }
         } catch (e) {
             setErro(e.message || 'Erro ao carregar ataques do Pokémon.');
         } finally {
             setCarregandoPokemon(false);
         }
-    }, [id, pokemonParam]);
+    }, [id, pokemonParam, shinyParam]);
 
     useEffect(() => {
         carregarBase();
-    }, [carregarBase]);
+        const pokemonIdAlvo = id || pokemonParam?.id;
+        if (pokemonIdAlvo) {
+            carregarStatusUsuario(pokemonIdAlvo);
+        }
+    }, [carregarBase, id, pokemonParam?.id, carregarStatusUsuario]);
+
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            const pokemonIdAlvo = id || pokemonParam?.id;
+            if (pokemonIdAlvo && token) {
+                carregarStatusUsuario(pokemonIdAlvo);
+            }
+        });
+        return unsubscribe;
+    }, [navigation, id, pokemonParam?.id, token, carregarStatusUsuario]);
 
     const ataquesFiltrados = useMemo(() => {
         if (!Array.isArray(pokemon?.moves)) return [];
@@ -162,13 +217,14 @@ export default function AttacksPokemonScreen({ route, navigation }) {
             return;
         }
 
-        const novoValor = !capturado;
-        setCapturado(novoValor);
+        const chave = ehShiny ? 'catchShiny' : 'catchNormal';
+        const novoValor = !statusUsuario[chave];
+        setStatusUsuario((prev) => ({ ...prev, [chave]: novoValor }));
 
         try {
-            await capturarPokemon(token, pokemon.id, novoValor);
+            await capturarPokemon(token, pokemon.id, novoValor, ehShiny);
         } catch (e) {
-            setCapturado(!novoValor);
+            setStatusUsuario((prev) => ({ ...prev, [chave]: !novoValor }));
             if (e.status === 401) {
                 await sair();
                 navigation.navigate('LoginScreen');
@@ -210,6 +266,8 @@ export default function AttacksPokemonScreen({ route, navigation }) {
                     <View style={styles.headerListaWrapper}>
                         <PokemonHeaderBanner
                             pokemon={pokemon}
+                            shiny={ehShiny}
+                            onAlternarShiny={() => setEhShiny((prev) => !prev)}
                             capturado={capturado}
                             onVoltar={() => navigation.goBack()}
                             onCapturar={handleCapturar}
@@ -338,7 +396,11 @@ export default function AttacksPokemonScreen({ route, navigation }) {
                                         },
                                     ]}
                                 >
-                                    <View style={[styles.pontoTipo, { backgroundColor: estiloTipo.principal }]} />
+                                    <MaterialCommunityIcons
+                                        name={estiloTipo.icone}
+                                        size={12}
+                                        color={estiloTipo.principal}
+                                    />
                                     <Text style={[styles.textoTipoAtaque, { color: estiloTipo.principal }]}>
                                         {detalhe?.type || '...'}
                                     </Text>
@@ -362,6 +424,7 @@ export default function AttacksPokemonScreen({ route, navigation }) {
                 abaAtiva="ataques"
                 navigation={navigation}
                 pokemon={pokemon}
+                shiny={ehShiny}
             />
         </View>
     );
@@ -519,11 +582,6 @@ const styles = StyleSheet.create({
         paddingVertical: 5,
         borderRadius: 9,
         borderWidth: 1,
-    },
-    pontoTipo: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
     },
     textoTipoAtaque: {
         fontSize: 11,

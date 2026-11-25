@@ -14,6 +14,9 @@ import PokemonScreen from './src/screens/PokemonScreen';
 import AttacksPokemonScreen from './src/screens/AttacksPokemonScreen';
 import InfoPokemonScreen from './src/screens/InfoPokemonScreen';
 import UserScreen from './src/screens/UserScreen';
+import UserFavoritesScreen from './src/screens/UserFavoritesScreen';
+import UserCapturedScreen from './src/screens/UserCapturedScreen';
+import TeamScreen from './src/screens/TeamScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -42,17 +45,17 @@ function Rotas() {
       <Stack.Screen name="AttacksPokemonScreen" component={AttacksPokemonScreen} />
       <Stack.Screen name="InfoPokemonScreen" component={InfoPokemonScreen} />
 
-
       {token ? (
         <>
-        <Stack.Screen name="UserScreen" component={UserScreen} />
-
+          <Stack.Screen name="UserScreen" component={UserScreen} />
+          <Stack.Screen name="TeamScreen" component={TeamScreen} />
+          <Stack.Screen name="UserFavoritesScreen" component={UserFavoritesScreen} />
+          <Stack.Screen name="UserCapturedScreen" component={UserCapturedScreen} />
         </>
       ) : (
         <>
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
           <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-
         </>
       )}
     </Stack.Navigator>
@@ -63,7 +66,7 @@ export default function App() {
   return (
     <AuthProvider>
       <NavigationContainer>
-        <StatusBar style="light" />
+        <StatusBar style="light" backgroundColor={cores.fundo} />
         <Rotas />
       </NavigationContainer>
     </AuthProvider>

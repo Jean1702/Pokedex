@@ -169,7 +169,6 @@ export default function HomeScreen({ navigation }) {
     const flashBranco = useRef(new Animated.Value(0)).current;
     const [indiceAtual, setIndiceAtual] = useState(0);
 
-    // Recalcula grama e partículas dinamicamente sempre que a janela redimensionar
     const laminasGrama = useMemo(() => {
         const quantidade = Math.max(24, Math.ceil(width / 16));
         return Array.from({ length: quantidade }, (_, i) => {

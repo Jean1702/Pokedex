@@ -2,10 +2,15 @@ import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { bordas, espacos } from '../styles/theme';
 
-export default function BottomHudPokemon({ abaAtiva, navigation, pokemon }) {
+export default function BottomHudPokemon({ abaAtiva, navigation, pokemon, shiny }) {
     const navegarPara = (rotaDestino) => {
         if (!navigation || !pokemon) return;
-        navigation.navigate(rotaDestino, { id: pokemon.id, pokemon });
+        const estadoShiny = shiny !== undefined ? Boolean(shiny) : Boolean(pokemon.shiny);
+        navigation.navigate(rotaDestino, {
+            id: pokemon.id,
+            shiny: estadoShiny,
+            pokemon: { ...pokemon, shiny: estadoShiny },
+        });
     };
 
     return (
