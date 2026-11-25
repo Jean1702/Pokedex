@@ -37,67 +37,6 @@ async function upsertPokemonUser(pokemonId, userId, fields) {
     .single();
 }
 
-async function traduzirTextoParaPt(textoIngles) {
-  if (!textoIngles) return null;
-
-  try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=pt&dt=t&q=${encodeURIComponent(textoIngles)}`;
-    const response = await fetch(url);
-    if (!response.ok) return null;
-
-    const json = await response.json();
-    const traduzido = Array.isArray(json?.[0])
-      ? json[0].map((parte) => parte?.[0] || '').join('').trim()
-      : '';
-
-    return traduzido || null;
-  } catch {
-    return null;
-  }
-}
-
-async function obterOuGerarDescricaoPt(pokemonId, descricaoSalva) {
-  if (descricaoSalva && String(descricaoSalva).trim()) {
-    return String(descricaoSalva).trim();
-  }
-
-  try {
-    const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${pokemonId}`);
-    if (!speciesRes.ok) return null;
-
-    const speciesData = await speciesRes.json();
-    const entradas = Array.isArray(speciesData?.flavor_text_entries)
-      ? speciesData.flavor_text_entries
-      : [];
-
-    const entradaPt = entradas.find((e) => e.language?.name === 'pt' || e.language?.name === 'pt-BR');
-    const entradaEn = entradas.find((e) => e.language?.name === 'en');
-    const bruto = (entradaPt || entradaEn)?.flavor_text;
-
-    if (!bruto) return null;
-
-    const textoLimpo = bruto
-      .replace(/[\f\n\r]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    const descricaoFinal = entradaPt
-      ? textoLimpo
-      : (await traduzirTextoParaPt(textoLimpo)) || textoLimpo;
-
-    if (descricaoFinal) {
-      await supabase
-        .from('pokemons')
-        .update({ description_pt: descricaoFinal })
-        .eq('id', pokemonId);
-    }
-
-    return descricaoFinal;
-  } catch {
-    return null;
-  }
-}
-
 router.get('/pokemons', async (req, res) => {
   const BATCH_SIZE = 1000;
   let allPokemons = [];
@@ -195,10 +134,11 @@ router.get('/pokemons/:id', async (req, res) => {
       return res.status(400).json({ erro: dbError.message, error: dbError.message });
     }
 
-    const [apiResponse, descriptionPt] = await Promise.all([
-      fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`),
-      obterOuGerarDescricaoPt(pokemonId, localPokemon?.description_pt),
-    ]);
+    const descriptionPt = localPokemon?.description_pt
+      ? String(localPokemon.description_pt).trim()
+      : null;
+
+    const apiResponse = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonId}`);
 
     if (!apiResponse.ok) {
       if (!localPokemon) {
@@ -207,7 +147,7 @@ router.get('/pokemons/:id', async (req, res) => {
       return res.status(200).json({
         ...localPokemon,
         description_pt: descriptionPt,
-        descricao: descriptionPt || 'Descrição não disponível.',
+        descricao: descriptionPt,
         types: (localPokemon.pokemon_types || [])
           .slice()
           .sort((a, b) => a.slot - b.slot)
@@ -233,7 +173,7 @@ router.get('/pokemons/:id', async (req, res) => {
       image: localPokemon ? localPokemon.image : apiData.sprites.front_default,
       shiny: localPokemon ? Boolean(localPokemon.shiny) : false,
       description_pt: descriptionPt,
-      descricao: descriptionPt || 'Descrição não disponível.',
+      descricao: descriptionPt,
       types
     });
   } catch (error) {
