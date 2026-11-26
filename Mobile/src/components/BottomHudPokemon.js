@@ -1,123 +1,124 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import { bordas, espacos } from '../styles/theme';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { cores, espacos } from '../styles/theme';
 
-export default function BottomHudPokemon({ abaAtiva, navigation, pokemon, shiny }) {
-    const navegarPara = (rotaDestino) => {
-        if (!navigation || !pokemon) return;
-        const estadoShiny = shiny !== undefined ? Boolean(shiny) : Boolean(pokemon.shiny);
-        navigation.navigate(rotaDestino, {
+const ABAS_FICHA = [
+    {
+        id: 'pokemon',
+        label: 'Ficha',
+        rota: 'PokemonScreen',
+        familia: 'mci',
+        iconeAtivo: 'pokeball',
+        iconeInativo: 'pokeball',
+    },
+    {
+        id: 'ataques',
+        label: 'Ataques',
+        rota: 'AttacksPokemonScreen',
+        familia: 'mci',
+        iconeAtivo: 'sword-cross',
+        iconeInativo: 'sword-cross',
+    },
+    {
+        id: 'info',
+        label: 'Info',
+        rota: 'InfoPokemonScreen',
+        familia: 'ion',
+        iconeAtivo: 'information-circle',
+        iconeInativo: 'information-circle-outline',
+    },
+];
+
+export default function BottomHudPokemon({
+    abaAtiva = 'pokemon',
+    navigation,
+    pokemon,
+    shiny = false,
+}) {
+    const navegarParaAba = (rota) => {
+        if (!navigation || !pokemon?.id) return;
+        navigation.replace(rota, {
             id: pokemon.id,
-            shiny: estadoShiny,
-            pokemon: { ...pokemon, shiny: estadoShiny },
+            pokemon,
+            shiny: Boolean(shiny),
         });
     };
 
     return (
-        <View style={styles.hudContainer}>
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => abaAtiva !== 'detalhe' && navegarPara('PokemonScreen')}
-                style={[
-                    styles.botaoHud,
-                    abaAtiva === 'detalhe' && styles.botaoHudAtivo,
-                ]}
-            >
-                <View
-                    style={[
-                        styles.iconeCirculo,
-                        abaAtiva === 'detalhe' && styles.iconePreenchidoLaranja,
-                    ]}
-                />
-            </TouchableOpacity>
+        <View style={styles.container}>
+            {ABAS_FICHA.map((aba) => {
+                const ativa = abaAtiva === aba.id;
+                const corItem = ativa ? cores.primaria : cores.textoSecundario;
 
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => abaAtiva !== 'ataques' && navegarPara('AttacksPokemonScreen')}
-                style={[
-                    styles.botaoHud,
-                    abaAtiva === 'ataques' && styles.botaoHudAtivo,
-                ]}
-            >
-                <View
-                    style={[
-                        styles.iconeQuadrado,
-                        abaAtiva === 'ataques' && styles.iconePreenchidoLaranja,
-                    ]}
-                />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => abaAtiva !== 'info' && navegarPara('InfoPokemonScreen')}
-                style={[
-                    styles.botaoHud,
-                    abaAtiva === 'info' && styles.botaoHudAtivo,
-                ]}
-            >
-                <View
-                    style={[
-                        styles.iconeLosango,
-                        abaAtiva === 'info' && styles.iconePreenchidoLaranja,
-                    ]}
-                />
-            </TouchableOpacity>
+                return (
+                    <TouchableOpacity
+                        key={aba.id}
+                        activeOpacity={0.8}
+                        disabled={ativa}
+                        onPress={() => navegarParaAba(aba.rota)}
+                        style={[styles.itemAba, ativa && styles.itemAbaAtiva]}
+                    >
+                        {aba.familia === 'mci' ? (
+                            <MaterialCommunityIcons
+                                name={ativa ? aba.iconeAtivo : aba.iconeInativo}
+                                size={20}
+                                color={corItem}
+                            />
+                        ) : (
+                            <Ionicons
+                                name={ativa ? aba.iconeAtivo : aba.iconeInativo}
+                                size={20}
+                                color={corItem}
+                            />
+                        )}
+                        <Text
+                            style={[
+                                styles.labelAba,
+                                { color: corItem },
+                                ativa && styles.labelAbaAtiva,
+                            ]}
+                        >
+                            {aba.label}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    hudContainer: {
+    container: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
-        backgroundColor: '#141418',
+        backgroundColor: cores.superficie,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.12)',
-        paddingVertical: espacos.pequeno + 4,
-        paddingHorizontal: espacos.grande,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        paddingVertical: 8,
+        paddingHorizontal: espacos.medio,
     },
-    botaoHud: {
-        width: 52,
-        height: 48,
-        borderRadius: bordas.raio + 2,
-        backgroundColor: '#1E1E24',
-        borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.14)',
-        justifyContent: 'center',
+    itemAba: {
+        flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 6,
+        marginHorizontal: 6,
+        borderRadius: 12,
+        gap: 3,
+        borderWidth: 1,
+        borderColor: 'transparent',
     },
-    botaoHudAtivo: {
-        borderColor: '#F59E0B',
-        backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    itemAbaAtiva: {
+        backgroundColor: cores.primariaClara,
+        borderColor: 'rgba(217, 80, 50, 0.45)',
     },
-    iconeCirculo: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
-        borderColor: '#A1A1AA',
-        backgroundColor: 'transparent',
+    labelAba: {
+        fontSize: 11,
+        fontWeight: '600',
     },
-    iconeQuadrado: {
-        width: 20,
-        height: 20,
-        borderRadius: 5,
-        borderWidth: 2,
-        borderColor: '#A1A1AA',
-        backgroundColor: 'transparent',
-    },
-    iconeLosango: {
-        width: 18,
-        height: 18,
-        borderRadius: 4,
-        borderWidth: 2,
-        borderColor: '#A1A1AA',
-        backgroundColor: 'transparent',
-        transform: [{ rotate: '45deg' }],
-    },
-    iconePreenchidoLaranja: {
-        backgroundColor: '#F59E0B',
-        borderColor: '#FDE68A',
+    labelAbaAtiva: {
+        fontWeight: '800',
     },
 });

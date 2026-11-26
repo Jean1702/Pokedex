@@ -25,7 +25,7 @@ import {
 import { cores, fontes, espacos, bordas } from '../styles/theme';
 
 const GERACOES = [
-    { id: 'todas', label: 'Todas', regiao: 'Dex Completa', faixa: '001–1025', min: 1, max: 1025, cor: '#F59E0B' },
+    { id: 'todas', label: 'Todas', regiao: 'Dex Completa', faixa: '001–1025', min: 1, max: Infinity, cor: '#F59E0B' },
     { id: 'gen1', label: 'Gen I', regiao: 'Kanto', faixa: '001–151', min: 1, max: 151, cor: '#EF4444' },
     { id: 'gen2', label: 'Gen II', regiao: 'Johto', faixa: '152–251', min: 152, max: 251, cor: '#F59E0B' },
     { id: 'gen3', label: 'Gen III', regiao: 'Hoenn', faixa: '252–386', min: 252, max: 386, cor: '#10B981' },
@@ -138,7 +138,8 @@ export default function UserFavoritesScreen({ navigation }) {
         return favoritos.filter((p) => {
             const idNum = Number(p.id);
             const bateGeracao =
-                idNum >= geracaoSelecionada.min && idNum <= geracaoSelecionada.max;
+                geracaoSelecionada.id === 'todas' ||
+                (idNum >= geracaoSelecionada.min && idNum <= geracaoSelecionada.max);
 
             const bateBusca =
                 !termo ||

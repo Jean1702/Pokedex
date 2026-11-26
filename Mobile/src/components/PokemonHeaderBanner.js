@@ -113,11 +113,10 @@ export default function PokemonHeaderBanner({
                         capturado && styles.botaoCapturadoAtivo,
                     ]}
                 >
-                    <View
-                        style={[
-                            styles.losangoCaptura,
-                            capturado && styles.losangoCapturaAtivo,
-                        ]}
+                    <MaterialCommunityIcons
+                        name="pokeball"
+                        size={20}
+                        color={capturado ? '#38BDF8' : cores.textoSecundario}
                     />
                 </TouchableOpacity>
             </View>
@@ -145,7 +144,6 @@ export default function PokemonHeaderBanner({
             </TouchableOpacity>
 
             <View style={styles.barraInferior}>
-                {/* Coluna Esquerda (flex: 1) */}
                 <View style={styles.slotLateralEsquerdo}>
                     <TouchableOpacity
                         activeOpacity={0.8}
@@ -163,7 +161,6 @@ export default function PokemonHeaderBanner({
                     </TouchableOpacity>
                 </View>
 
-                {/* Coluna Central (sempre alinhada ao centro exato da esfera) */}
                 <View style={styles.indicadoresCarrossel}>
                     {listaSprites.map((_, idx) => {
                         const ativo = indiceSprite === idx;
@@ -190,7 +187,6 @@ export default function PokemonHeaderBanner({
                     })}
                 </View>
 
-                {/* Coluna Direita (flex: 1) */}
                 <View style={styles.slotLateralDireito}>
                     <View style={styles.grupoTipos}>
                         {tipos.map((tipo) => {
@@ -249,20 +245,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     botaoCapturadoAtivo: {
-        borderColor: '#FACC15',
-        backgroundColor: 'rgba(250, 204, 21, 0.18)',
-    },
-    losangoCaptura: {
-        width: 14,
-        height: 14,
-        borderRadius: 2.5,
-        borderWidth: 1.8,
-        borderColor: cores.texto,
-        transform: [{ rotate: '45deg' }],
-    },
-    losangoCapturaAtivo: {
-        backgroundColor: '#FACC15',
-        borderColor: '#FEF9C3',
+        borderColor: 'rgba(56, 189, 248, 0.65)',
+        backgroundColor: 'rgba(56, 189, 248, 0.18)',
     },
     tituloTopo: {
         flex: 1,

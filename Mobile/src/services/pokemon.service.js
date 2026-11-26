@@ -55,6 +55,29 @@ function calcularEfetividadeDefensiva(tiposPokemon) {
     return { fraquezas, resistencias, imunidades };
 }
 
+function extrairIdDaUrl(url) {
+    const match = String(url || '').match(/\/(\d+)\/?$/);
+    return match ? Number(match[1]) : null;
+}
+
+function formatarNomeMega(slug) {
+    const partes = String(slug || '').split('-');
+    const idxMega = partes.indexOf('mega');
+    if (idxMega === -1) return slug;
+
+    const base = partes
+        .slice(0, idxMega)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+
+    const sufixo = partes
+        .slice(idxMega + 1)
+        .map((p) => p.toUpperCase())
+        .join(' ');
+
+    return sufixo ? `Mega ${base} ${sufixo}` : `Mega ${base}`;
+}
+
 function extrairEvolucoes(noCadeia, lista = []) {
     if (!noCadeia) return lista;
 
@@ -96,9 +119,13 @@ export const buscarDetalhesCompletosPokemon = async (id) => {
         dadosBase.descricao ||
         '';
     let evolucoes = [];
+    let megas = [];
 
     try {
-        const respEspecie = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
+        const urlSpecies =
+            dadosBase?.species?.url || `https://pokeapi.co/api/v2/pokemon-species/${id}`;
+        const respEspecie = await fetch(urlSpecies);
+
         if (respEspecie.ok) {
             const dadosEspecie = await respEspecie.json();
 
@@ -119,15 +146,32 @@ export const buscarDetalhesCompletosPokemon = async (id) => {
                     evolucoes = extrairEvolucoes(dadosEvolucao.chain);
                 }
             }
+
+            if (Array.isArray(dadosEspecie.varieties)) {
+                megas = dadosEspecie.varieties
+                    .filter((v) => v?.pokemon?.name?.includes('-mega'))
+                    .map((v) => {
+                        const megaId = extrairIdDaUrl(v.pokemon.url);
+                        return {
+                            id: megaId,
+                            slug: v.pokemon.name,
+                            name: formatarNomeMega(v.pokemon.name),
+                            image: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${megaId}.png`,
+                        };
+                    })
+                    .filter((m) => m.id !== null);
+            }
         }
     } catch {
         evolucoes = [];
+        megas = [];
     }
 
     return {
         ...dadosBase,
         descricao: descricao || 'Descrição não disponível.',
         evolucoes,
+        megas,
     };
 };
 
@@ -160,7 +204,10 @@ export const buscarInformacoesExtrasPokemon = async (id) => {
     };
 
     try {
-        const respEspecie = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
+        const urlSpecies =
+            dadosBase?.species?.url || `https://pokeapi.co/api/v2/pokemon-species/${id}`;
+        const respEspecie = await fetch(urlSpecies);
+
         if (respEspecie.ok) {
             const dadosEspecie = await respEspecie.json();
             especieInfo = {

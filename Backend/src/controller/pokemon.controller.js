@@ -2,27 +2,96 @@ const router = require('express').Router();
 const supabase = require('../db/supabase');
 const authMiddleware = require('../view/middleware/auth');
 
+async function garantirPokemonNoBanco(pokemonId) {
+  const idNum = Number(pokemonId);
+  if (!idNum) return false;
+
+  const { data: existente } = await supabase
+    .from('pokemons')
+    .select('id')
+    .eq('id', idNum)
+    .maybeSingle();
+
+  if (existente) return true;
+
+  const resp = await fetch(`https://pokeapi.co/api/v2/pokemon/${idNum}`);
+  if (!resp.ok) return false;
+
+  const dadosApi = await resp.json();
+  const imagemNormal =
+    dadosApi.sprites?.other?.['official-artwork']?.front_default ||
+    dadosApi.sprites?.front_default ||
+    '';
+
+  const { error: insertPokemonError } = await supabase
+    .from('pokemons')
+    .insert([{
+      id: idNum,
+      name: dadosApi.name,
+      image: imagemNormal,
+      shiny: false,
+      description_pt: 'Forma Mega Evoluída.',
+    }]);
+
+  if (insertPokemonError) return false;
+
+  if (Array.isArray(dadosApi.types) && dadosApi.types.length > 0) {
+    const { data: tiposBanco } = await supabase
+      .from('types')
+      .select('id, name');
+
+    if (Array.isArray(tiposBanco)) {
+      const mapaTipos = new Map(
+        tiposBanco.map((t) => [String(t.name).toLowerCase(), t.id])
+      );
+
+      const relacoesTipos = dadosApi.types
+        .map((t) => ({
+          id_pokemon: idNum,
+          id_type: mapaTipos.get(String(t.type?.name || '').toLowerCase()),
+          slot: t.slot,
+        }))
+        .filter((r) => r.id_type !== undefined);
+
+      if (relacoesTipos.length > 0) {
+        await supabase.from('pokemon_types').insert(relacoesTipos);
+      }
+    }
+  }
+
+  return true;
+}
+
 async function upsertPokemonUser(pokemonId, userId, fields) {
-  const { data: existente, error: fetchError } = await supabase
+  const pronto = await garantirPokemonNoBanco(pokemonId);
+  if (!pronto) {
+    return { error: { message: 'Pokémon não encontrado para registro.' } };
+  }
+
+  const { data: existentes, error: fetchError } = await supabase
     .from('pokemon_user')
     .select('id_pokemon, id_user')
     .eq('id_pokemon', pokemonId)
-    .eq('id_user', userId)
-    .maybeSingle();
+    .eq('id_user', userId);
 
   if (fetchError) return { error: fetchError };
 
-  if (existente) {
-    return supabase
+  if (Array.isArray(existentes) && existentes.length > 0) {
+    const { data, error } = await supabase
       .from('pokemon_user')
       .update(fields)
       .eq('id_pokemon', pokemonId)
       .eq('id_user', userId)
-      .select()
-      .single();
+      .select();
+
+    if (error) return { error };
+
+    return {
+      data: data?.[0] || { id_pokemon: pokemonId, id_user: userId, ...fields },
+    };
   }
 
-  return supabase
+  const { data, error } = await supabase
     .from('pokemon_user')
     .insert([{
       id_pokemon: pokemonId,
@@ -31,10 +100,15 @@ async function upsertPokemonUser(pokemonId, userId, fields) {
       catch: false,
       catch_shiny: false,
       favority_shiny: false,
-      ...fields
+      ...fields,
     }])
-    .select()
-    .single();
+    .select();
+
+  if (error) return { error };
+
+  return {
+    data: data?.[0] || { id_pokemon: pokemonId, id_user: userId, ...fields },
+  };
 }
 
 router.get('/pokemons', async (req, res) => {
@@ -58,6 +132,7 @@ router.get('/pokemons', async (req, res) => {
           )
         )
       `)
+      .lte('id', 1025)
       .order('id', { ascending: true })
       .range(from, from + BATCH_SIZE - 1);
 
@@ -210,11 +285,11 @@ router.put('/pokemons/:id/catch', authMiddleware, async (req, res) => {
   const userId = req.usuario.id;
 
   if (Number.isNaN(pokemonId)) {
-    return res.status(400).json({ erro: 'ID inválido' });
+    return res.status(400).json({ erro: 'ID inválido', error: 'ID inválido' });
   }
 
   if (typeof isCaught !== 'boolean') {
-    return res.status(400).json({ erro: 'O campo catch (boolean) é obrigatório' });
+    return res.status(400).json({ erro: 'O campo catch (boolean) é obrigatório', error: 'O campo catch (boolean) é obrigatório' });
   }
 
   const campoAtualizado = Boolean(shiny)
@@ -223,7 +298,7 @@ router.put('/pokemons/:id/catch', authMiddleware, async (req, res) => {
 
   const { data, error } = await upsertPokemonUser(pokemonId, userId, campoAtualizado);
 
-  if (error) return res.status(400).json({ erro: error.message });
+  if (error) return res.status(400).json({ erro: error.message, error: error.message });
   return res.status(200).json(data);
 });
 

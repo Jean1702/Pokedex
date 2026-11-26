@@ -9,7 +9,7 @@ import {
     ActivityIndicator,
     Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import BottomHudPokemon from '../components/BottomHudPokemon';
 import PokemonHeaderBanner, { obterEstiloTipo } from '../components/PokemonHeaderBanner';
 import { AuthContext } from '../contexts/AuthContext';
@@ -60,7 +60,7 @@ export default function PokemonScreen({ route, navigation }) {
     });
     const [tocandoChoro, setTocandoChoro] = useState(false);
 
-    const favorito = ehShiny ? statusUsuario.favShiny : statusUsuario.favNormal;
+    const favoritado = ehShiny ? statusUsuario.favShiny : statusUsuario.favNormal;
     const capturado = ehShiny ? statusUsuario.catchShiny : statusUsuario.catchNormal;
 
     useEffect(() => {
@@ -215,6 +215,7 @@ export default function PokemonScreen({ route, navigation }) {
     const numeroFormatado = `#${String(pokemon.id).padStart(2, '0')}`;
     const alturaMetros = pokemon.height ? `${(pokemon.height / 10).toFixed(1)} m` : '--';
     const pesoKg = pokemon.weight ? `${(pokemon.weight / 10).toFixed(1)} kg` : '--';
+    const temMega = Array.isArray(pokemon.megas) && pokemon.megas.length > 0;
 
     return (
         <View style={styles.container}>
@@ -234,21 +235,30 @@ export default function PokemonScreen({ route, navigation }) {
 
                 <View style={styles.corpoFicha}>
                     <View style={styles.linhaTitulo}>
-                        <Text style={styles.nomePokemon}>
+                        <Text style={styles.nomePokemon} numberOfLines={1}>
                             {pokemon.name} <Text style={styles.numeroPokemon}>{numeroFormatado}</Text>
                         </Text>
-
                         <TouchableOpacity
                             activeOpacity={0.8}
                             onPress={handleFavoritar}
-                            style={styles.botaoFavoritoWrapper}
+                            style={[
+                                styles.botaoFavoritarPill,
+                                favoritado && styles.botaoFavoritadoAtivo,
+                            ]}
                         >
-                            <View
-                                style={[
-                                    styles.losangoFavorito,
-                                    favorito && styles.losangoFavoritoAtivo,
-                                ]}
+                            <Ionicons
+                                name={favoritado ? 'star' : 'star-outline'}
+                                size={16}
+                                color={favoritado ? '#FACC15' : cores.textoSecundario}
                             />
+                            <Text
+                                style={[
+                                    styles.textoFavoritarPill,
+                                    favoritado && { color: '#FACC15' },
+                                ]}
+                            >
+                                {favoritado ? 'Favorito' : 'Favoritar'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
@@ -382,6 +392,61 @@ export default function PokemonScreen({ route, navigation }) {
                         )}
                     </View>
 
+                    {temMega && (
+                        <View style={[styles.cardBloco, styles.cardBlocoMega]}>
+                            <View style={styles.cabecalhoEvolucao}>
+                                <View style={styles.tituloMegaBox}>
+                                    <MaterialCommunityIcons
+                                        name="dna"
+                                        size={18}
+                                        color="#EC4899"
+                                    />
+                                    <Text style={styles.tituloCardCenter}>Mega Evolução</Text>
+                                </View>
+
+                                <View style={styles.badgeMegaStone}>
+                                    <Text style={styles.textoBadgeMegaStone}>Mega Stone</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.linhaMegas}>
+                                {pokemon.megas.map((mega) => {
+                                    const atual = mega.id === Number(pokemon.id);
+                                    const uriMega = ehShiny
+                                        ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${mega.id}.png`
+                                        : mega.image;
+
+                                    return (
+                                        <TouchableOpacity
+                                            key={mega.id}
+                                            activeOpacity={0.82}
+                                            onPress={() =>
+                                                !atual &&
+                                                navigation.push('PokemonScreen', {
+                                                    id: mega.id,
+                                                    shiny: ehShiny,
+                                                })
+                                            }
+                                            style={[
+                                                styles.itemMega,
+                                                atual && styles.itemMegaAtual,
+                                            ]}
+                                        >
+                                            <Image
+                                                source={{ uri: uriMega }}
+                                                resizeMode="contain"
+                                                style={styles.imagemMega}
+                                            />
+                                            <Text style={styles.nomeMega} numberOfLines={2}>
+                                                {mega.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
+
                     <View style={styles.cardBloco}>
                         <Text style={styles.tituloCardCenter}>Estatísticas Básicas</Text>
 
@@ -428,7 +493,7 @@ export default function PokemonScreen({ route, navigation }) {
             </ScrollView>
 
             <BottomHudPokemon
-                abaAtiva="detalhe"
+                abaAtiva="pokemon"
                 navigation={navigation}
                 pokemon={pokemon}
                 shiny={ehShiny}
@@ -461,8 +526,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: 8,
     },
     nomePokemon: {
+        flex: 1,
         color: cores.texto,
         fontSize: fontes.titulo + 2,
         fontWeight: '800',
@@ -472,22 +539,25 @@ const styles = StyleSheet.create({
         color: cores.textoSecundario,
         fontWeight: '700',
     },
-    botaoFavoritoWrapper: {
-        padding: 8,
+    botaoFavoritarPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 12,
+        backgroundColor: cores.superficie,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.14)',
     },
-    losangoFavorito: {
-        width: 22,
-        height: 22,
-        borderRadius: 4,
-        backgroundColor: '#EA580C',
-        borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.7)',
-        transform: [{ rotate: '45deg' }],
+    botaoFavoritadoAtivo: {
+        backgroundColor: 'rgba(250, 204, 21, 0.16)',
+        borderColor: 'rgba(250, 204, 21, 0.6)',
     },
-    losangoFavoritoAtivo: {
-        backgroundColor: '#FACC15',
-        borderColor: '#FEF9C3',
-        transform: [{ rotate: '45deg' }, { scale: 1.15 }],
+    textoFavoritarPill: {
+        color: cores.textoSecundario,
+        fontSize: 12,
+        fontWeight: '700',
     },
     secaoDescricao: {
         backgroundColor: cores.superficie,
@@ -550,6 +620,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: cores.borda,
     },
+    cardBlocoMega: {
+        borderColor: 'rgba(236, 72, 153, 0.35)',
+    },
     tituloCard: {
         color: cores.texto,
         fontSize: fontes.grande,
@@ -566,6 +639,24 @@ const styles = StyleSheet.create({
         color: cores.texto,
         fontSize: fontes.grande,
         fontWeight: '700',
+    },
+    tituloMegaBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    badgeMegaStone: {
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: 'rgba(236, 72, 153, 0.14)',
+        borderWidth: 1,
+        borderColor: 'rgba(236, 72, 153, 0.45)',
+    },
+    textoBadgeMegaStone: {
+        color: '#F472B6',
+        fontSize: 10,
+        fontWeight: '800',
     },
     chipShinyEvolucao: {
         flexDirection: 'row',
@@ -648,6 +739,40 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'capitalize',
+    },
+    linhaMegas: {
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    itemMega: {
+        minWidth: 125,
+        maxWidth: 155,
+        flex: 1,
+        backgroundColor: cores.fundo,
+        borderRadius: bordas.raio + 2,
+        padding: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: 'rgba(236, 72, 153, 0.3)',
+        gap: 4,
+    },
+    itemMegaAtual: {
+        borderColor: '#EC4899',
+        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+    },
+    imagemMega: {
+        width: 72,
+        height: 72,
+    },
+    nomeMega: {
+        color: cores.texto,
+        fontSize: 12,
+        fontWeight: '700',
+        textAlign: 'center',
     },
     cabecalhoTabelaStats: {
         flexDirection: 'row',
